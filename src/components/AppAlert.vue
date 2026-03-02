@@ -45,8 +45,7 @@ defineEmits(['close'])
   padding-right: 3rem;
 }
 .btn-close {
-  position: absolute;
-  top: 50%;
+  top: 20%;
   right: 1rem;
   transform: translateY(-50%);
   width: 1.5rem;

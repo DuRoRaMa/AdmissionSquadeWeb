@@ -184,10 +184,11 @@ async function handleSubmit() {
     last_name: last_name.value,
     first_name: first_name.value,
     middle_name: middle_name.value,
+    conf_password: conf_password.value,
   }
   const result = await authStore.register(UserData)
   if (result.success) {
-    router.push({ name: 'home' })
+    router.push({ name: 'login' })
   } else {
     errorMessage.value = result.message || 'Ошибка регистрации'
   }

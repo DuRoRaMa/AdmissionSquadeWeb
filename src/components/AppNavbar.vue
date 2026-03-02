@@ -26,9 +26,6 @@
           <li v-if="!authStore.isAuthenticated" class="nav-item">
             <router-link to="/login" class="nav-link" active-class="active">Вход</router-link>
           </li>
-          <li v-if="!authStore.isAuthenticated" class="nav-item">
-            <router-link to="/register" class="nav-link" active-class="active">Регистрация</router-link>
-          </li>
           <li v-if="authStore.isAuthenticated" class="nav-item">
             <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Выйти</button>
           </li>

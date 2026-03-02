@@ -22,11 +22,6 @@
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--card-shadow-hover);
-  background: var(--card-bg-solid);
-}
 .card-header {
   padding: var(--card-padding);
   background: var(--header-footer-bg);

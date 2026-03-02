@@ -32,7 +32,7 @@ async function handleSubmit() {
   })
 
   if (result.success) {
-    router.push({ name: 'home' })
+    router.push({ name: 'profile' })
   } else {
     errorMessage.value = result.message || 'Ошибка входа'
   }

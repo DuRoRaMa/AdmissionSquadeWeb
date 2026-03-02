@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import axios from 'axios'
+import apiClient from '../axios'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -8,29 +10,36 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
 
-  function setToken(newToken) {
-    token.value = newToken
-    if (newToken) {
-      localStorage.setItem('token', newToken)
+  function setToken(accessToken, refreshToken = null) {
+    if (accessToken) {
+      localStorage.setItem('token', accessToken)
+      token.value = accessToken
     } else {
       localStorage.removeItem('token')
+      token.value = null
+    }
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken)
+    } else {
+      localStorage.removeItem('refreshToken')
     }
   }
 
   async function login(credentials) {
     isLoading.value = true
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      // Эмуляция проверки
-      if (credentials.email === 'test@example.com' && credentials.password === '123456') {
-        const fakeToken = 'fake-jwt-token-' + Date.now()
-        const fakeUser = { id: 1, email: credentials.email, username: 'Test User' }
-        setToken(fakeToken)
-        user.value = fakeUser
-        return { success: true, user: fakeUser }
-      } else {
-        return { success: false, message: 'Неверный email или пароль' }
-      }
+      const tokenResponse = await apiClient.post('api/v1/users/auth/token/', {
+        email: credentials.email,
+        password: credentials.password,
+      })
+      const { access, refresh } = tokenResponse.data
+      setToken(access, refresh)
+      const userResponse = await apiClient.get('api/v1/users/me/')
+      user.value = userResponse.data
+      return { success: true, user: user.value }
+    } catch (error) {
+      const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'Ошибка входа'
+      return { success: false, message }
     } finally {
       isLoading.value = false
     }
@@ -44,19 +53,19 @@ export const useAuthStore = defineStore('auth', () => {
   async function register(userData) {
     isLoading.value = true
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const fakeToken = 'fake-jwt-token-' + Date.now()
-      const fakeUser = {
-        id: Date.now(),
-        email: userData.email,
-        username: userData.username,
-        last_name: userData.last_name,
-        first_name: userData.first_name,
-        middle_name: userData.middle_name,
+      const userResponse = apiClient.post('api/v1/users/register/', userData)
+      return {
+        success: true,
+        message: (await userResponse).data.message || 'Регистрация успешна',
+        user: (await userResponse).data,
       }
-      setToken(fakeToken)
-      user.value = fakeUser
-      return { success: true, user: fakeUser }
+    } catch (error) {
+      const message =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message ||
+        'Ошибка регистрации'
+      return { success: false, message }
     } finally {
       isLoading.value = false
     }
@@ -82,6 +91,23 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function fetchUser() {
+    if (!token.value) return null
+    isLoading.value = true
+    try {
+      const response = await apiClient.get('api/v1/users/me/')
+      user.value = response.data
+      return user.value
+    } catch (error) {
+      if (error.response?.status === 401) {
+        logout()
+      }
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     user,
     token,
@@ -92,6 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     forgotPassword,
     resetPassword,
+    fetchUser,
   }
 })
 
