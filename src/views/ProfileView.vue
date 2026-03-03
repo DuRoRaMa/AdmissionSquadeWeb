@@ -2,7 +2,8 @@
 import { useAuthStore } from '@/stores/auth'
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-
+import AppProfileCard from '../components/AppProfileCard.vue'
+import AppInfoProfileCard from '../components/AppInfoProfileCard.vue'
 const authStore = useAuthStore()
 const router = useRouter()
 
@@ -19,24 +20,29 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="profile">
-    <h1>Профиль</h1>
-    <div v-if="authStore.user">
-      <p><strong>Имя пользователя:</strong> {{ authStore.user.username }}</p>
-      <p>
-        <strong>ФИО:</strong> {{ authStore.user.last_name }} {{ authStore.user.first_name }}
-        {{ authStore.user.middle_name }}
-      </p>
-      <p><strong>Email:</strong> {{ authStore.user.email }}</p>
-      <p><strong>phone:</strong> {{ authStore.user.phone }}</p>
-      <p><strong>is_blocked:</strong> {{ authStore.user.is_blocked }}</p>
-      <p><strong>created_at:</strong> {{ authStore.user.created_at }}</p>
-      <p><strong>updated_at:</strong> {{ authStore.user.updated_at }}</p>
-      <button @click="handleLogout">Выйти</button>
-    </div>
-    <div v-else>
-      <p>Загрузка...</p>
+  <div class="profile-container">
+    <AppProfileCard :user="authStore.user" />
+    <div class="main-content">
     </div>
   </div>
 </template>
 
+<style scoped>
+
+.profile-container {
+  max-width: 1300px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 32px;
+  box-shadow: 0 20px 35px -8px rgba(0, 20, 30, 0.15);
+  padding: 32px;
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+.main-content {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+</style>
