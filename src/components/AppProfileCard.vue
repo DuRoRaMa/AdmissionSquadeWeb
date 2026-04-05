@@ -8,7 +8,6 @@
         {{ location }}
       </div>
     </div>
-    <!-- Блок с QR пока убран по условию задачи -->
   </div>
 </template>
 
@@ -16,38 +15,24 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  user: {
-    type: Object,
-    required: true
-  },
-  location: {
-    type: String,
-    default: ''
-  },
-  role: {
-    type: String,
-    default: ''
-  }
+  user: Object,
+  location: { type: String, default: '' }
 })
 
-// Полное имя
 const fullName = computed(() => {
   const { last_name = '', first_name = '', middle_name = '' } = props.user
   return `${last_name} ${first_name} ${middle_name}`.trim()
 })
 
-// Инициалы (первая буква имени и фамилии)
 const initials = computed(() => {
   const first = props.user.first_name?.[0] || ''
   const last = props.user.last_name?.[0] || ''
   return (first + last).toUpperCase() || '?'
 })
 
-// Роль: если передана через пропс — используем её, иначе пытаемся взять из memberships
 const userRole = computed(() => {
-  if (props.role) return props.role
   if (props.user.memberships?.length) {
-    return props.user.memberships[0].role.name || 'Участник'
+    return props.user.memberships[0].role_detail?.name || props.user.memberships[0].role?.name || 'Участник'
   }
   return 'Участник'
 })
@@ -56,27 +41,30 @@ const userRole = computed(() => {
 <style scoped>
 .profile-sidebar {
   flex: 0 0 280px;
-  background: #ffffff;
+  background: var(--card-bg);
+  backdrop-filter: blur(var(--card-blur));
   border-radius: 28px;
   padding: 20px;
-  border: 1px solid #eef2f6;
-  box-shadow: 0 10px 25px -12px rgba(0,0,0,0.1);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   gap: 24px;
+  transition: all 0.2s ease;
 }
-
+.profile-sidebar:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+}
 .avatar-block {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
-
 .avatar {
   width: 140px;
   height: 140px;
-  background: linear-gradient(145deg, #2563eb, #38bdf8);
+  background: var(--accent-gradient);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -84,39 +72,37 @@ const userRole = computed(() => {
   font-size: 52px;
   font-weight: 500;
   color: white;
-  box-shadow: 0 12px 22px -8px #2563eb80;
-  border: 4px solid white;
+  box-shadow: 0 12px 22px -8px rgba(102, 126, 234, 0.5);
+  border: 4px solid var(--card-bg-solid);
   margin-bottom: 16px;
 }
-
 .avatar-block h2 {
   font-size: 1.8rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  color: #0f172a;
+  color: var(--text-color);
   margin-bottom: 4px;
 }
-
 .avatar-block .role {
   font-weight: 500;
   color: #2563eb;
   margin-bottom: 8px;
-  background: #eef6ff;
+  background: rgba(37, 99, 235, 0.15);
   padding: 4px 16px;
   border-radius: 40px;
   display: inline-block;
 }
-
+.dark-theme .avatar-block .role {
+  background: rgba(37, 99, 235, 0.3);
+  color: #60a5fa;
+}
 .avatar-block .location {
-  color: #475569;
+  color: var(--text-muted);
   font-size: 0.95rem;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
   flex-wrap: wrap;
 }
-
 @media (max-width: 900px) {
   .profile-sidebar {
     flex: 0 0 auto;

@@ -164,4 +164,20 @@ const hasRightIcon = computed(() => !!slots['right-icon'])
 .right-icon button:hover {
   color: var(--text-color);
 }
+/* В main.css или в scoped-стилях AppInput.vue */
+.form-control {
+  transition: all 0.2s ease-in-out;
+}
+
+.form-control:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* Для тёмной темы */
+.dark-theme .form-control:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(159, 122, 234, 0.6);
+}
 </style>

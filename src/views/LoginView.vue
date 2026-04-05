@@ -132,27 +132,34 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
-/* Заголовок сайта */
 .site-title {
   font-weight: 600;
   color: var(--text-color);
   margin-top: 0.5rem;
 }
-
-/* Ссылка "Забыли пароль?" */
 .forgot-link {
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.9rem;
-  transition: color 0.2s, transform 0.1s;
+  transition: color 0.2s;
 }
-
 .forgot-link:hover {
   color: var(--accent-gradient);
   text-decoration: underline;
-  transform: translateX(2px);
 }
-
+.register-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+.register-link:hover { text-decoration: underline; }
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
 /* Кнопка показа пароля (используется в слоте right-icon) */
 .password-toggle {
   background: none;
@@ -164,59 +171,14 @@ async function handleSubmit() {
   line-height: 1;
   transition: color 0.2s;
 }
-
-.password-toggle:hover {
-  color: var(--text-color);
-}
-
-/* Ссылка на регистрацию в подвале карточки */
-.register-link {
-  color: var(--text-muted);
-  text-decoration: none;
-  font-weight: 500;
-  margin-left: 0.25rem;
-}
-
-.register-link:hover {
-  text-decoration: underline;
-}
-
-/* Стили для футерных ссылок внизу страницы */
-.footer-links {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
 .footer-link {
   color: var(--text-muted);
   text-decoration: none;
-  transition: color 0.2s;
 }
-
-.footer-link:hover {
-  color: var(--text-color);
-  text-decoration: underline;
-}
-
-.separator {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-/* Анимация появления карточки */
-.fade-slide-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.fade-slide-leave-active {
-  transition: all 0.2s ease-in;
-}
-
-.fade-slide-enter-from,
-.fade-slide-leave-to {
+.footer-link:hover { color: var(--text-color); text-decoration: underline; }
+.fade-slide-enter-active { transition: all 0.3s ease-out; }
+.fade-slide-leave-active { transition: all 0.2s ease-in; }
+.fade-slide-enter-from, .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(20px);
 }

@@ -1,10 +1,10 @@
+// stores/auth.js (обновлённый)
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import axios from 'axios'
 import apiClient from '../axios'
+import { useUserStore } from './user' // добавляем импорт
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null)
   const token = ref(localStorage.getItem('token') || null)
   const isLoading = ref(false)
 
@@ -34,9 +34,12 @@ export const useAuthStore = defineStore('auth', () => {
       })
       const { access, refresh } = tokenResponse.data
       setToken(access, refresh)
-      const userResponse = await apiClient.get('api/v1/users/me/')
-      user.value = userResponse.data
-      return { success: true, user: user.value }
+
+      // Загружаем данные пользователя через userStore
+      const userStore = useUserStore()
+      await userStore.fetchUser()
+
+      return { success: true, user: userStore.user }
     } catch (error) {
       const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'Ошибка входа'
       return { success: false, message }
@@ -46,25 +49,24 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
-    setToken(null)
-    user.value = null
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    token.value = null
+    const userStore = useUserStore()
+    userStore.clearUser()
   }
 
   async function register(userData) {
     isLoading.value = true
     try {
-      const userResponse = apiClient.post('api/v1/users/register/', userData)
+      const response = await apiClient.post('api/v1/users/register/', userData)
       return {
         success: true,
-        message: (await userResponse).data.message || 'Регистрация успешна',
-        user: (await userResponse).data,
+        message: response.data.message || 'Регистрация успешна',
+        user: response.data,
       }
     } catch (error) {
-      const message =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        'Ошибка регистрации'
+      const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'Ошибка регистрации'
       return { success: false, message }
     } finally {
       isLoading.value = false
@@ -91,25 +93,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function fetchUser() {
-    if (!token.value) return null
-    isLoading.value = true
-    try {
-      const response = await apiClient.get('api/v1/users/me/')
-      user.value = response.data
-      return user.value
-    } catch (error) {
-      if (error.response?.status === 401) {
-        logout()
-      }
-      return null
-    } finally {
-      isLoading.value = false
-    }
-  }
-
+  // Убираем fetchUser и updateUser, они теперь в userStore
   return {
-    user,
     token,
     isLoading,
     isAuthenticated,
@@ -118,8 +103,6 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     forgotPassword,
     resetPassword,
-    fetchUser,
   }
 })
-
 export default useAuthStore

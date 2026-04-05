@@ -1,98 +1,148 @@
 <template>
-  <div class="card">
-    <h2><span>{{ icon }}</span> {{ title }}</h2>
-    <div class="card-content">
-      <template v-for="(item, index) in items" :key="index">
-        <!-- Строка -->
-        <p v-if="typeof item === 'string'">{{ item }}</p>
-        <!-- Объект с label и value -->
-        <p v-else-if="item.label && item.value !== undefined">
-          <strong>{{ item.label }}</strong> {{ item.value }}
-        </p>
-        <!-- Объект с icon и text -->
-        <p v-else-if="item.icon && item.text">
-          <span>{{ item.icon }}</span> {{ item.text }}
-        </p>
-        <!-- Объект только с text -->
-        <p v-else-if="item.text">{{ item.text }}</p>
-        <!-- Запасной вариант -->
-        <p v-else>{{ item }}</p>
-      </template>
-    </div>
-    <div v-if="$slots.footer" class="card-footer">
-      <slot name="footer" />
-    </div>
+  <div class="user-profile-card">
+    <section class="card-section">
+      <h3>Личная информация</h3>
+      <div class="info-grid">
+        <div><strong>Фамилия:</strong> {{ user.last_name }}</div>
+        <div><strong>Имя:</strong> {{ user.first_name }}</div>
+        <div><strong>Отчество:</strong> {{ user.middle_name || '—' }}</div>
+        <div><strong>Пол:</strong> {{ gender }}</div>
+        <div><strong>Дата рождения:</strong> {{ formatDate(user.memberships[0]?.birth_day) }}</div>
+        <div><strong>Статус:</strong> {{ user.is_blocked ? 'Заблокирован' : 'Активен' }}</div>
+      </div>
+    </section>
+    <section class="card-section">
+      <h3>Контактная информация</h3>
+      <div class="info-grid">
+        <div><strong>Email:</strong> {{ user.email }}</div>
+        <div><strong>Телефон:</strong> {{ user.phone }}</div>
+      </div>
+    </section>
+    <section class="card-section">
+      <h3>Данные аккаунта</h3>
+      <div class="info-grid">
+        <div><strong>Имя пользователя:</strong> {{ user.username }}</div>
+        <div><strong>Дата регистрации:</strong> {{ formatDate(user.created_at) }}</div>
+        <div><strong>Последнее обновление:</strong> {{ formatDate(user.updated_at) }}</div>
+      </div>
+    </section>
+        <section class="card-section" v-if="user.memberships?.length">
+      <h3>Участие в отрядах</h3>
+      <div v-for="(membership, idx) in user.memberships" :key="idx" class="membership-item">
+        <h4>Отряд: {{ membership.squad.name }}</h4>
+        <div class="info-grid">
+          <div><strong>Роль:</strong> {{ membership.role.name }}</div>
+          <div><strong>Региональное отделение:</strong> {{ membership.squad.regional_office }}</div>
+          <div><strong>Регион:</strong> {{ membership.squad.region }}</div>
+          <div><strong>Работодатель:</strong> {{ membership.squad.employer }}</div>
+          <div><strong>Университет:</strong> {{ membership.university }}</div>
+          <div><strong>Факультет:</strong> {{ membership.faculty }}</div>
+          <div><strong>Группа:</strong> {{ membership.student_group }}</div>
+          <div><strong>Форма обучения:</strong> {{ studyForm(membership.study_form) }}</div>
+          <div><strong>Дата вступления:</strong> {{ formatDate(membership.joined_date) }}</div>
+          <div><strong>Статус участия:</strong> {{ membership.is_active ? 'Активно' : 'Неактивно' }}</div>
+        </div>
+
+        <!-- Взносы (если есть) -->
+        <div v-if="membership.fees?.length" class="fees-section">
+          <h5>Взносы</h5>
+          <ul>
+            <li v-for="(fee, i) in membership.fees" :key="i">
+              Сумма: {{ fee.amount }} руб. | Оплачен: {{ formatDate(fee.paid_at) }} | Истекает: {{ formatDate(fee.expires_at) }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-defineProps({
-  title: {
-    type: String,
-    required: true
-  },
-  icon: {
-    type: String,
-    default: '📄'
-  },
-  items: {
-    type: Array,
-    default: () => []
+import { computed } from 'vue';
+
+const props = defineProps({
+  user: {
+    type: Object,
+    required: true,
   }
+});
+const gender = computed(() => {
+  const gender = props.user.memberships?.[0]?.gender;
+  if (gender === 'male') return 'Мужской';
+  if (gender === 'female') return 'Жеский';
+  return 'Не указан'
 })
+function  formatDate(dateString) {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('ru-RU');
+}
+function studyForm(form){
+  const forms = {
+    'Full-time': 'Очная',
+    'Part-time': 'Заочная',
+    'Full-part-time': 'Очно-заочная',
+  }
+  return forms[form] || form
+}
 </script>
 
 <style scoped>
-.card {
-  background: #ffffff;
-  border: 1px solid #eef2f6;
-  border-radius: 24px;
-  padding: 22px;
-  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.08);
-  transition: all 0.1s;
+.user-profile-card {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 20px;
 }
 
-.card:hover {
-  box-shadow: 0 16px 28px -12px rgba(0, 80, 200, 0.15);
-  border-color: #d9e2ef;
+.card-section {
+  margin-bottom: 24px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 16px;
 }
 
-.card h2 {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin-bottom: 18px;
-  color: #0f172a;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 2px solid #f1f4f9;
-  padding-bottom: 12px;
+.card-section h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  color: #333;
 }
 
-.card h2 span {
-  font-size: 1.5rem;
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
 }
 
-.card-content p {
-  font-size: 0.98rem;
-  color: #334155;
+.membership-item {
+  background: #f9f9f9;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.membership-item h4 {
+  margin-top: 0;
   margin-bottom: 12px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
+  color: #2c3e50;
 }
 
-.card-content p strong {
-  font-weight: 600;
-  color: #0f172a;
-  min-width: 100px;
-}
-
-.card-footer {
+.fees-section {
   margin-top: 12px;
-  border-top: 1px dashed #edf2f7;
-  padding-top: 12px;
-  font-size: 0.95rem;
+  padding-top: 8px;
+  border-top: 1px dashed #ccc;
+}
+
+.fees-section h5 {
+  margin: 8px 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
 }
 </style>
