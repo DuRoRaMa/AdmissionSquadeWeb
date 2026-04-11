@@ -27,10 +27,10 @@
           </li>
           <!-- Админские ссылки (видны только при is_staff = true) -->
           <li v-if="userStore.user?.is_staff" class="nav-item">
-            <router-link to="/admin/users" class="nav-link" active-class="active">Пользователи</router-link>
+            <router-link to="/dashboard/users" class="nav-link" active-class="active">Пользователи</router-link>
           </li>
           <li v-if="userStore.user?.is_staff" class="nav-item">
-            <router-link to="/admin/roles" class="nav-link" active-class="active">Роли</router-link>
+            <router-link to="/dashboard/roles" class="nav-link" active-class="active">Роли</router-link>
           </li>
           <!-- Ссылка на профиль (для всех авторизованных) -->
           <li v-if="authStore.isAuthenticated" class="nav-item">

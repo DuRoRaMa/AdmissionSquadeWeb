@@ -11,6 +11,8 @@ import MySquadsView from '@/views/MySquadsView.vue'
 import SquadManageView from '@/views/SquadManageView.vue'
 import useAuthStore from '@/stores/auth'
 import useUserStore from '@/stores/user' // ← добавлен импорт
+import AdminUsersView from '@/views/AdminUsersView.vue'
+import AdminRolesView from '@/views/AdminRolesView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView },
@@ -28,6 +30,8 @@ const routes = [
     meta: { requiresAuth: true, requiresCommander: true }
   },
   { path: '/:pathMatch(.*)*', name: 'Not-found', component: NotFoundView },
+  { path: '/dashboard/users', name: 'dashboard-users', component: AdminUsersView, meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/dashboard/roles', name: 'dashboard-roles', component: AdminRolesView, meta: { requiresAuth: true, requiresAdmin: true } },
 ]
 
 const router = createRouter({
@@ -48,7 +52,10 @@ router.beforeEach(async (to, from, next) => {
     next({ name: 'login' })
     return
   }
-
+  if (to.meta.requiresAdmin && !userStore.user?.is_staff) {
+    next({ name: 'home' })
+    return
+  }
   if (to.meta.requiresCommander && authStore.isAuthenticated) {
     if (!userStore.user) {
       await userStore.fetchUser()

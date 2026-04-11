@@ -8,7 +8,7 @@
     </div>
 
     <div v-if="activeTab === 'info'">
-      <SquadEditForm :squad="squad" @updated="fetchSquad" />
+      <SquadEditForm :squad="squad" @updated="fetchSquad" @deleted="handleDeleted" />
     </div>
     <div v-if="activeTab === 'members'">
       <MembersManage :squadId="squadIdNumber" />
@@ -21,15 +21,16 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import apiClient from '@/axios'
 import SquadEditForm from '@/components/SquadEditForm.vue'
 import MembersManage from '@/components/MembersManage.vue'
 import FeesManage from '@/components/FeesManage.vue'
 
 const route = useRoute()
-const squadId = ref(route.params.id)           // строка
-const squadIdNumber = computed(() => Number(squadId.value))  // число
+const router = useRouter()
+const squadId = ref(route.params.id)
+const squadIdNumber = computed(() => Number(squadId.value))
 const squad = ref(null)
 const activeTab = ref('info')
 
@@ -42,11 +43,14 @@ async function fetchSquad() {
   }
 }
 
+function handleDeleted() {
+  router.push('/squads')
+}
+
 onMounted(fetchSquad)
 </script>
 
 <style scoped>
-/* стили остаются без изменений */
 .squad-manage {
   max-width: 1200px;
   margin: 0 auto;

@@ -6,7 +6,7 @@
     <div v-else>
       <div v-for="member in members" :key="member.id" class="member-fees">
         <div class="member-header">
-          <h4>{{ member.user_detail?.full_name || member.user_detail?.email || `ID: ${member.user}` }}</h4>
+          <h4>{{ member.user_detail?.full_name || member.user_detail?.email || member.user }}</h4>
           <button class="btn-add-fee" @click="addFee(member.id)">+ Добавить взнос</button>
         </div>
         <div v-if="member.fees && member.fees.length" class="fees-list">
@@ -21,14 +21,7 @@
         <div v-else class="no-fees">Нет взносов</div>
       </div>
     </div>
-
-    <!-- Модальное окно для добавления/редактирования взноса -->
-    <ModalAddFee
-      v-model:visible="showFeeModal"
-      :membershipId="currentMembershipId"
-      :fee="currentFee"
-      @saved="fetchMembersWithFees"
-    />
+    <ModalAddFee v-model:visible="showFeeModal" :membershipId="currentMembershipId" :fee="currentFee" @saved="fetchMembersWithFees" />
   </div>
 </template>
 
@@ -36,13 +29,10 @@
 import { ref, onMounted } from 'vue'
 import apiClient from '@/axios'
 import ModalAddFee from '@/components/ModalAddFee.vue'
+import { useConfirmModal } from '@/composables/useConfirmModal'
 
-const props = defineProps({
-  squadId: {
-    type: Number,
-    required: true
-  }
-})
+const props = defineProps({ squadId: Number })
+const { confirm } = useConfirmModal()
 
 const members = ref([])
 const loading = ref(false)
@@ -86,13 +76,16 @@ function editFee(fee, membershipId) {
 }
 
 async function deleteFee(fee) {
-  if (!confirm('Удалить взнос?')) return
+  const ok = await confirm({
+    title: 'Удаление взноса',
+    message: `Удалить взнос на сумму ${fee.amount} руб.?`
+  })
+  if (!ok) return
   try {
     await apiClient.delete(`/api/v1/squads/fees/${fee.id}/`)
     fetchMembersWithFees()
   } catch (error) {
     alert('Ошибка удаления взноса')
-    console.error(error)
   }
 }
 

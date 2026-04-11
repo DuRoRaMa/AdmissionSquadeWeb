@@ -3,41 +3,41 @@
     <div v-if="visible" class="modal-overlay" @click.self="close">
       <div class="modal-container">
         <div class="modal-header">
-          <h3>Добавить участника</h3>
+          <h3>Создать отряд</h3>
           <button class="close-btn" @click="close">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="form-row">
-            <label>Пользователь</label>
-            <AppSelect
-              v-model="form.user_id"
-              :options="userOptions"
-              placeholder="Выберите пользователя"
-            />
-          </div>
-          <div class="form-row">
-            <label>Роль</label>
-            <AppSelect
-              v-model="form.role_id"
-              :options="roleOptions"
-              placeholder="Выберите роль"
-            />
-          </div>
-          <div class="form-row">
-            <label>Номер билета</label>
-            <input v-model="form.ticket_number" type="text" placeholder="Необязательно" />
-          </div>
-          <div class="form-row">
-            <label>Университет</label>
-            <input v-model="form.university" type="text" placeholder="ДВФУ" />
-          </div>
-          <div v-if="error" class="error-message">{{ error }}</div>
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="close" :disabled="loading">Отмена</button>
-            <button class="btn-submit" @click="submit" :disabled="loading || !form.user_id || !form.role_id">
-              {{ loading ? 'Добавление...' : 'Добавить' }}
-            </button>
-          </div>
+          <form @submit.prevent="submit">
+            <div class="form-row">
+              <label>Название *</label>
+              <input v-model="form.name" type="text" required />
+            </div>
+            <div class="form-row">
+              <label>Описание</label>
+              <textarea v-model="form.description" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+              <label>Региональное отделение</label>
+              <input v-model="form.regional_office" type="text" />
+            </div>
+            <div class="form-row">
+              <label>Регион</label>
+              <input v-model="form.region" type="text" />
+            </div>
+            <div class="form-row">
+              <label>Работодатель</label>
+              <input v-model="form.employer" type="text" />
+            </div>
+            <div class="form-row">
+              <label>Направление ЛСО</label>
+              <input v-model="form.lso_directions" type="text" />
+            </div>
+            <div v-if="error" class="error-message">{{ error }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="close">Отмена</button>
+              <button type="submit" class="btn-submit" :disabled="loading">Создать</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -45,62 +45,38 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import apiClient from '@/axios'
-import AppSelect from '@/components/AppSelect.vue'
 
 const props = defineProps({
-  visible: Boolean,
-  squadId: Number
+  visible: Boolean
 })
-const emit = defineEmits(['update:visible', 'added'])
+const emit = defineEmits(['update:visible', 'created'])
 
-const users = ref([])
-const roles = ref([])
-const form = ref({ user_id: '', role_id: '', ticket_number: '', university: 'ДВФУ' })
+const form = ref({
+  name: '',
+  description: '',
+  regional_office: 'Приморское РО',
+  region: 'Приморский край',
+  employer: 'ФГАОУ ВО "ДВФУ"',
+  lso_directions: 'Студенческие сервисные отряды'
+})
 const loading = ref(false)
 const error = ref('')
 
-const userOptions = computed(() =>
-  users.value.map(u => ({ value: u.id, label: u.full_name || u.email }))
-)
-const roleOptions = computed(() =>
-  roles.value.map(r => ({ value: r.id, label: r.name }))
-)
-
-async function fetchUsers() {
-  try {
-    const res = await apiClient.get('/api/v1/users/')
-    users.value = res.data.results || res.data
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-async function fetchRoles() {
-  try {
-    const res = await apiClient.get('/api/v1/users/roles/')
-    roles.value = res.data
-  } catch (err) {
-    console.error(err)
-  }
-}
-
 async function submit() {
+  if (!form.value.name.trim()) {
+    error.value = 'Название обязательно'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
-    await apiClient.post(`/api/v1/squads/${props.squadId}/members/`, {
-      user: form.value.user_id,
-      role: form.value.role_id,
-      squad: props.squadId,
-      ticket_number: form.value.ticket_number,
-      university: form.value.university
-    })
-    emit('added')
+    await apiClient.post('/api/v1/squads/', form.value)
+    emit('created')
     close()
   } catch (err) {
-    error.value = err.response?.data?.detail || 'Ошибка добавления'
+    error.value = err.response?.data?.detail || err.response?.data?.name?.[0] || 'Ошибка создания'
   } finally {
     loading.value = false
   }
@@ -112,9 +88,14 @@ function close() {
 
 watch(() => props.visible, (val) => {
   if (val) {
-    fetchUsers()
-    fetchRoles()
-    form.value = { user_id: '', role_id: '', ticket_number: '', university: 'ДВФУ' }
+    form.value = {
+      name: '',
+      description: '',
+      regional_office: 'Приморское РО',
+      region: 'Приморский край',
+      employer: 'ФГАОУ ВО "ДВФУ"',
+      lso_directions: 'Студенческие сервисные отряды'
+    }
     error.value = ''
   }
 })

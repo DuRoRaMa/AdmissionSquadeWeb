@@ -53,7 +53,7 @@ async function updateDropdownPosition() {
     left: `${rect.left}px`,          // исправлено: без scrollX
     width: `${rect.width}px`,
     margin: 0,
-    zIndex: 9999
+    zIndex: 10001
   }
 }
 

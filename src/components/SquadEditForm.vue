@@ -27,6 +27,7 @@
       </div>
       <div class="actions">
         <button type="submit" class="btn-save" :disabled="isLoading">Сохранить</button>
+        <button type="button" class="btn-delete" @click="confirmDelete" :disabled="isDeleting">Удалить отряд</button>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
     </form>
@@ -35,28 +36,24 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import apiClient from '@/axios'
+import { useConfirmModal } from '@/composables/useConfirmModal'
 
 const props = defineProps({
   squad: Object
 })
-const emit = defineEmits(['updated'])
+const emit = defineEmits(['updated', 'deleted'])
 
-const form = ref({
-  name: '',
-  description: '',
-  regional_office: '',
-  region: '',
-  employer: '',
-  lso_directions: ''
-})
+const router = useRouter()
+const { confirm } = useConfirmModal()
+const form = ref({ ...props.squad })
 const isLoading = ref(false)
+const isDeleting = ref(false)
 const error = ref('')
 
 watch(() => props.squad, (newSquad) => {
-  if (newSquad) {
-    form.value = { ...newSquad }
-  }
+  if (newSquad) form.value = { ...newSquad }
 }, { immediate: true })
 
 async function save() {
@@ -71,9 +68,33 @@ async function save() {
     isLoading.value = false
   }
 }
+
+async function confirmDelete() {
+  const ok = await confirm({
+    title: 'Удаление отряда',
+    message: 'Вы уверены, что хотите удалить этот отряд? Это действие необратимо.'
+  })
+  if (!ok) return
+  isDeleting.value = true
+  error.value = ''
+  try {
+    await apiClient.delete(`/api/v1/squads/${props.squad.id}/`)
+    emit('deleted')
+    router.push('/squads')
+  } catch (err) {
+    if (err.response?.status === 400) {
+      error.value = err.response?.data?.detail || 'Нельзя удалить отряд с активными участниками'
+    } else {
+      error.value = 'Ошибка удаления'
+    }
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <style scoped>
+/* стили остаются без изменений */
 .squad-edit-form {
   padding: 1rem;
   background: var(--card-bg-solid);
@@ -100,7 +121,9 @@ async function save() {
   color: var(--text-color);
 }
 .actions {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
   margin-top: 1rem;
 }
 .btn-save {
@@ -112,12 +135,21 @@ async function save() {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-.btn-save:disabled {
+.btn-save:disabled, .btn-delete:disabled {
   opacity: 0.6;
+}
+.btn-delete {
+  background: #dc3545;
+  border: none;
+  border-radius: 50px;
+  padding: 0.4rem 1.2rem;
+  color: white;
+  cursor: pointer;
 }
 .error {
   color: var(--input-error-color);
   margin-top: 0.5rem;
+  text-align: center;
 }
 @media (max-width: 768px) {
   .form-row {

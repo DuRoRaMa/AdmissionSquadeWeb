@@ -15,58 +15,49 @@
           <tr v-for="m in members" :key="m.id">
             <td>{{ m.user_detail?.full_name || m.user_detail?.email || m.user }}</td>
             <td>
-              <select v-model="m.role" @change="updateRole(m)">
-                <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </select>
-             </td>
-            <td>
-              <input v-model="m.ticket_number" @blur="updateTicket(m)" class="ticket-input" />
-             </td>
+              <AppSelect
+                v-model="m.role"
+                :options="roleOptions"
+                @update:modelValue="updateRole(m)"
+              />
+            </td>
+            <td><input v-model="m.ticket_number" @blur="updateTicket(m)" class="ticket-input" /></td>
             <td>{{ formatDate(m.joined_date) }}</td>
-            <td>
-              <button class="btn-remove" @click="removeMember(m)">Исключить</button>
-             </td>
-           </tr>
+            <td><button class="btn-remove" @click="removeMember(m)">Исключить</button></td>
+          </tr>
         </tbody>
       </table>
     </div>
-
-    <ModalAddMember
-      v-model:visible="showAddModal"
-      :squadId="squadId"
-      @added="fetchMembers"
-    />
+    <ModalAddMember v-model:visible="showAddModal" :squadId="squadId" @added="fetchMembers" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import apiClient from '@/axios'
 import ModalAddMember from './ModalAddMember.vue'
+import AppSelect from '@/components/AppSelect.vue'
+import { useConfirmModal } from '@/composables/useConfirmModal'
 
-const props = defineProps({
-  squadId: Number
-})
+const props = defineProps({ squadId: Number })
+const { confirm } = useConfirmModal()
 
 const members = ref([])
 const roles = ref([])
 const loading = ref(false)
 const showAddModal = ref(false)
 
+const roleOptions = computed(() =>
+  roles.value.map(r => ({ value: r.id, label: r.name }))
+)
+
 async function fetchMembers() {
   loading.value = true
   try {
     const res = await apiClient.get(`/api/v1/squads/${props.squadId}/members/`)
-    // Поддержка пагинации
-    if (res.data && Array.isArray(res.data.results)) {
-      members.value = res.data.results
-    } else if (Array.isArray(res.data)) {
-      members.value = res.data
-    } else {
-      members.value = []
-    }
+    members.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
   } catch (err) {
-    console.error('Ошибка загрузки участников:', err)
+    console.error(err)
     members.value = []
   } finally {
     loading.value = false
@@ -76,10 +67,9 @@ async function fetchMembers() {
 async function fetchRoles() {
   try {
     const res = await apiClient.get('/api/v1/users/roles/')
-    roles.value = Array.isArray(res.data) ? res.data : []
+    roles.value = res.data
   } catch (err) {
-    console.error('Ошибка загрузки ролей:', err)
-    roles.value = []
+    console.error(err)
   }
 }
 
@@ -101,13 +91,16 @@ async function updateTicket(member) {
 }
 
 async function removeMember(member) {
-  if (confirm(`Исключить ${member.user_detail?.full_name || member.user}?`)) {
-    try {
-      await apiClient.delete(`/api/v1/squads/members/${member.id}/`)
-      fetchMembers()
-    } catch (err) {
-      alert('Ошибка исключения')
-    }
+  const ok = await confirm({
+    title: 'Исключение участника',
+    message: `Исключить ${member.user_detail?.full_name || member.user} из отряда?`
+  })
+  if (!ok) return
+  try {
+    await apiClient.delete(`/api/v1/squads/members/${member.id}/`)
+    fetchMembers()
+  } catch (err) {
+    alert('Ошибка исключения')
   }
 }
 

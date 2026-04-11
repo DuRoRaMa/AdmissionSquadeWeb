@@ -3,28 +3,18 @@
     <div v-if="visible" class="modal-overlay" @click.self="close">
       <div class="modal-container">
         <div class="modal-header">
-          <h3>{{ editing ? 'Редактировать взнос' : 'Добавить взнос' }}</h3>
+          <h3>{{ editing ? 'Редактировать роль' : 'Создать роль' }}</h3>
           <button class="close-btn" @click="close">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-row">
-            <label>Сумма (руб.)</label>
-            <input v-model="form.amount" type="number" step="0.01" required />
-          </div>
-          <div class="form-row">
-            <label>Дата оплаты</label>
-            <input v-model="form.paid_at" type="date" required />
-          </div>
-          <div class="form-row">
-            <label>Дата истечения</label>
-            <input v-model="form.expires_at" type="date" required />
+            <label>Название</label>
+            <input v-model="form.name" required />
           </div>
           <div v-if="error" class="error-message">{{ error }}</div>
           <div class="modal-footer">
             <button class="btn-cancel" @click="close">Отмена</button>
-            <button class="btn-submit" @click="submit" :disabled="loading || !form.amount || !form.paid_at || !form.expires_at">
-              {{ loading ? 'Сохранение...' : 'Сохранить' }}
-            </button>
+            <button class="btn-submit" @click="submit" :disabled="loading">Сохранить</button>
           </div>
         </div>
       </div>
@@ -38,42 +28,37 @@ import apiClient from '@/axios'
 
 const props = defineProps({
   visible: Boolean,
-  membershipId: Number,
-  fee: Object
+  role: Object
 })
 const emit = defineEmits(['update:visible', 'saved'])
 
-const form = ref({ amount: '', paid_at: '', expires_at: '' })
+const form = ref({ name: '' })
 const loading = ref(false)
 const error = ref('')
 const editing = ref(false)
 
-function resetForm() {
-  form.value = { amount: '', paid_at: '', expires_at: '' }
-  editing.value = false
-}
-
-function setFee(fee) {
-  if (fee) {
-    form.value = {
-      amount: fee.amount,
-      paid_at: fee.paid_at,
-      expires_at: fee.expires_at
-    }
+function reset() {
+  if (props.role) {
+    form.value = { name: props.role.name }
     editing.value = true
   } else {
-    resetForm()
+    form.value = { name: '' }
+    editing.value = false
   }
 }
 
 async function submit() {
+  if (!form.value.name.trim()) {
+    error.value = 'Название обязательно'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
     if (editing.value) {
-      await apiClient.patch(`/api/v1/squads/fees/${props.fee.id}/`, form.value)
+      await apiClient.patch(`/api/v1/users/roles/${props.role.id}/`, form.value)
     } else {
-      await apiClient.post(`/api/v1/squads/members/${props.membershipId}/fees/`, form.value)
+      await apiClient.post('/api/v1/users/roles/', form.value)
     }
     emit('saved')
     close()
@@ -89,10 +74,8 @@ function close() {
 }
 
 watch(() => props.visible, (val) => {
-  if (val) {
-    setFee(props.fee)
-    error.value = ''
-  }
+  if (val) reset()
+  else error.value = ''
 })
 </script>
 
@@ -115,11 +98,10 @@ watch(() => props.visible, (val) => {
   border-radius: var(--card-border-radius);
   width: 90%;
   max-width: 550px;
-  max-height: 90vh;            /* ограничиваем высоту */
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--card-shadow);
-  overflow: hidden;
 }
 .modal-header {
   display: flex;
@@ -128,7 +110,6 @@ watch(() => props.visible, (val) => {
   padding: 1rem;
   background: var(--header-footer-bg);
   border-bottom: 1px solid var(--card-border);
-  flex-shrink: 0;
 }
 .modal-header h3 {
   margin: 0;
@@ -140,11 +121,10 @@ watch(() => props.visible, (val) => {
   font-size: 1.8rem;
   cursor: pointer;
   color: var(--text-muted);
-  line-height: 1;
 }
 .modal-body {
   padding: 1rem;
-  overflow-y: auto;            /* вертикальная прокрутка */
+  overflow-y: auto;
   flex: 1;
 }
 .form-row {
@@ -157,7 +137,6 @@ watch(() => props.visible, (val) => {
   color: var(--text-color);
 }
 .form-row input,
-.form-row textarea,
 .form-row select {
   width: 100%;
   padding: 0.5rem;
@@ -173,10 +152,8 @@ watch(() => props.visible, (val) => {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  flex-shrink: 0;
 }
-.btn-cancel,
-.btn-submit {
+.btn-cancel, .btn-submit {
   padding: 0.4rem 1rem;
   border: none;
   border-radius: 50px;
@@ -192,12 +169,6 @@ watch(() => props.visible, (val) => {
 }
 .error-message {
   color: var(--input-error-color);
-  margin-bottom: 0.5rem;
-}
-@media (max-width: 576px) {
-  .modal-container {
-    width: 95%;
-    max-height: 85vh;
-  }
+  margin-top: 0.5rem;
 }
 </style>
