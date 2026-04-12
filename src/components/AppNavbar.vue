@@ -1,7 +1,35 @@
+<script setup>
+import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
+import { useRouter } from 'vue-router'
+
+const authStore = useAuthStore()
+const userStore = useUserStore()
+const themeStore = useThemeStore()
+const router = useRouter()
+
+const isCommander = computed(() => {
+  return (
+    userStore.user?.is_staff ||
+    userStore.user?.memberships?.some(
+      m => m.role_detail?.slug === 'commander' || m.role_detail?.name === 'Командир'
+    )
+  )
+})
+
+function handleLogout() {
+  authStore.logout()
+  router.push({ name: 'login' })
+}
+</script>
+
 <template>
   <nav class="navbar navbar-expand-lg">
     <div class="container">
       <router-link to="/" class="navbar-brand">ССервО "СОПКа"</router-link>
+
       <button
         class="navbar-toggler"
         type="button"
@@ -13,44 +41,103 @@
       >
         <span class="navbar-toggler-icon"></span>
       </button>
+
       <div id="navbarNav" class="collapse navbar-collapse">
-        <!-- Основное меню (для всех авторизованных) -->
-        <ul class="navbar-nav me-auto">
+        <ul class="navbar-nav me-auto" v-if="authStore.isAuthenticated">
           <li class="nav-item">
             <router-link to="/" class="nav-link" exact-active-class="active">Главная</router-link>
           </li>
-          <li v-if="authStore.isAuthenticated" class="nav-item">
-            <router-link to="/squads" class="nav-link" active-class="active">Отряды</router-link>
+
+          <li class="nav-item dropdown">
+            <a
+              class="nav-link dropdown-toggle"
+              href="#"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              Работа
+            </a>
+            <ul class="dropdown-menu">
+              <li>
+                <router-link to="/availability" class="dropdown-item">Доступность</router-link>
+              </li>
+              <li>
+                <router-link to="/schedule" class="dropdown-item">Мой график</router-link>
+              </li>
+              <li>
+                <router-link to="/schedule/requests" class="dropdown-item">Мои заявки</router-link>
+              </li>
+              <li><hr class="dropdown-divider" /></li>
+              <li>
+                <router-link to="/my-squads" class="dropdown-item">Мои отряды</router-link>
+              </li>
+              <li>
+                <router-link to="/squads" class="dropdown-item">Все отряды</router-link>
+              </li>
+            </ul>
           </li>
-          <li v-if="authStore.isAuthenticated" class="nav-item">
-            <router-link to="/my-squads" class="nav-link" active-class="active">Мои отряды</router-link>
+
+          <li v-if="isCommander" class="nav-item dropdown">
+            <a
+              class="nav-link dropdown-toggle"
+              href="#"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              Управление
+            </a>
+            <ul class="dropdown-menu">
+              <li>
+                <router-link to="/dashboard/availability" class="dropdown-item">
+                  Формы доступности
+                </router-link>
+              </li>
+              <li>
+                <router-link to="/dashboard/schedules" class="dropdown-item">
+                  Графики
+                </router-link>
+              </li>
+              <li>
+                <router-link to="/dashboard/change-requests" class="dropdown-item">
+                  Заявки на изменения
+                </router-link>
+              </li>
+              <li>
+                <router-link to="/dashboard/scanner" class="dropdown-item">
+                  Сканер QR
+                </router-link>
+              </li>
+
+              <template v-if="userStore.user?.is_staff">
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <router-link to="/dashboard/users" class="dropdown-item">Пользователи</router-link>
+                </li>
+                <li>
+                  <router-link to="/dashboard/roles" class="dropdown-item">Роли</router-link>
+                </li>
+              </template>
+            </ul>
           </li>
-          <!-- Админские ссылки (видны только при is_staff = true) -->
-          <li v-if="userStore.user?.is_staff" class="nav-item">
-            <router-link to="/dashboard/users" class="nav-link" active-class="active">Пользователи</router-link>
-          </li>
-          <li v-if="userStore.user?.is_staff" class="nav-item">
-            <router-link to="/dashboard/roles" class="nav-link" active-class="active">Роли</router-link>
-          </li>
-          <!-- Ссылка на профиль (для всех авторизованных) -->
-          <li v-if="authStore.isAuthenticated" class="nav-item">
+
+          <li class="nav-item">
             <router-link to="/profile" class="nav-link" active-class="active">Профиль</router-link>
           </li>
         </ul>
 
-        <!-- Правая часть: имя пользователя, выход, тема -->
-        <ul class="navbar-nav">
+        <ul class="navbar-nav ms-auto">
           <li v-if="authStore.isAuthenticated" class="nav-item">
             <span class="navbar-text me-3">
-              {{ userStore.user?.full_name || userStore.user?.first_name || userStore.user?.email || '' }}
+              {{ userStore.user?.first_name || userStore.user?.email || 'Пользователь' }}
             </span>
           </li>
-          <li v-if="!authStore.isAuthenticated" class="nav-item">
-            <router-link to="/login" class="nav-link" active-class="active">Вход</router-link>
-          </li>
+
           <li v-if="authStore.isAuthenticated" class="nav-item">
-            <button class="btn btn-outline-danger btn-sm" @click="handleLogout">Выйти</button>
+            <button class="btn btn-link nav-link" @click="handleLogout">Выйти</button>
           </li>
+
           <li class="nav-item">
             <button class="btn btn-link nav-link theme-toggle" @click="themeStore.toggleTheme">
               <i :class="themeStore.isDark ? 'bi-sun' : 'bi-moon'"></i>
@@ -62,25 +149,7 @@
   </nav>
 </template>
 
-<script setup>
-import { useAuthStore } from '@/stores/auth'
-import { useUserStore } from '@/stores/user'
-import { useThemeStore } from '@/stores/theme'
-import { useRouter } from 'vue-router'
-
-const authStore = useAuthStore()
-const userStore = useUserStore()
-const themeStore = useThemeStore()
-const router = useRouter()
-
-function handleLogout() {
-  authStore.logout()
-  router.push({ name: 'login' })
-}
-</script>
-
 <style scoped>
-/* Стили кнопки темы (оставить как есть) */
 .theme-toggle {
   border: none;
   background: transparent;
@@ -90,6 +159,7 @@ function handleLogout() {
   border-radius: 50%;
   transition: background 0.2s;
 }
+
 .theme-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
 }

@@ -1,27 +1,3 @@
-<template>
-  <Teleport to="body">
-    <div v-if="visible" class="modal-overlay" @click.self="close">
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3>{{ editing ? 'Редактировать роль' : 'Создать роль' }}</h3>
-          <button class="close-btn" @click="close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <label>Название</label>
-            <input v-model="form.name" required />
-          </div>
-          <div v-if="error" class="error-message">{{ error }}</div>
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="close">Отмена</button>
-            <button class="btn-submit" @click="submit" :disabled="loading">Сохранить</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-</template>
-
 <script setup>
 import { ref, watch } from 'vue'
 import apiClient from '@/axios'
@@ -30,21 +6,71 @@ const props = defineProps({
   visible: Boolean,
   role: Object
 })
+
 const emit = defineEmits(['update:visible', 'saved'])
 
-const form = ref({ name: '' })
+const form = ref({
+  name: '',
+  slug: ''
+})
+
 const loading = ref(false)
 const error = ref('')
 const editing = ref(false)
+const slugTouched = ref(false)
+
+const ruMap = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z',
+  и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
+  с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh',
+  щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya'
+}
+
+function transliterate(text) {
+  return text
+    .toLowerCase()
+    .split('')
+    .map(char => ruMap[char] ?? char)
+    .join('')
+}
+
+function buildSlug(value) {
+  return transliterate(value)
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
 
 function reset() {
   if (props.role) {
-    form.value = { name: props.role.name }
+    form.value = {
+      name: props.role.name || '',
+      slug: props.role.slug || buildSlug(props.role.name || '')
+    }
     editing.value = true
   } else {
-    form.value = { name: '' }
+    form.value = {
+      name: '',
+      slug: ''
+    }
     editing.value = false
   }
+
+  slugTouched.value = false
+  error.value = ''
+}
+
+function handleNameInput() {
+  if (!slugTouched.value) {
+    form.value.slug = buildSlug(form.value.name)
+  }
+}
+
+function handleSlugInput() {
+  slugTouched.value = true
+  form.value.slug = buildSlug(form.value.slug)
 }
 
 async function submit() {
@@ -52,18 +78,30 @@ async function submit() {
     error.value = 'Название обязательно'
     return
   }
+
+  if (!form.value.slug.trim()) {
+    error.value = 'Slug обязателен'
+    return
+  }
+
   loading.value = true
   error.value = ''
+
   try {
     if (editing.value) {
       await apiClient.patch(`/api/v1/users/roles/${props.role.id}/`, form.value)
     } else {
       await apiClient.post('/api/v1/users/roles/', form.value)
     }
+
     emit('saved')
     close()
   } catch (err) {
-    error.value = err.response?.data?.detail || 'Ошибка сохранения'
+    error.value =
+      err.response?.data?.slug?.[0] ||
+      err.response?.data?.name?.[0] ||
+      err.response?.data?.detail ||
+      'Ошибка сохранения'
   } finally {
     loading.value = false
   }
@@ -79,96 +117,187 @@ watch(() => props.visible, (val) => {
 })
 </script>
 
+<template>
+  <Teleport to="body">
+    <div v-if="visible" class="modal-overlay" @click.self="close">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>{{ editing ? 'Редактировать роль' : 'Создать роль' }}</h3>
+          <button class="close-btn" @click="close">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-row">
+            <label>Название</label>
+            <input
+              v-model="form.name"
+              required
+              placeholder="Например: Командир"
+              @input="handleNameInput"
+            />
+          </div>
+
+          <div class="form-row">
+            <label>Slug</label>
+            <input
+              v-model="form.slug"
+              required
+              placeholder="Например: commander"
+              @input="handleSlugInput"
+            />
+            <small class="hint">
+              Используется в правах доступа и API. Лучше короткое латинское значение.
+            </small>
+          </div>
+
+          <div v-if="error" class="error-message">{{ error }}</div>
+
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="close">Отмена</button>
+            <button class="btn-submit" @click="submit" :disabled="loading">
+              {{ loading ? 'Сохранение...' : 'Сохранить' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
 <style scoped>
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
+  padding: 16px;
 }
+
 .modal-container {
   background: var(--card-bg-solid);
   border-radius: var(--card-border-radius);
-  width: 90%;
-  max-width: 550px;
-  max-height: 90vh;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(90vh, 820px);
   display: flex;
   flex-direction: column;
   box-shadow: var(--card-shadow);
+  overflow: hidden;
 }
+
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 1rem 1.2rem;
   background: var(--header-footer-bg);
-  border-bottom: 1px solid var(--card-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+
 .modal-header h3 {
   margin: 0;
   color: var(--text-color);
+  font-size: clamp(1rem, 1.2vw, 1.15rem);
 }
+
 .close-btn {
   background: none;
   border: none;
   font-size: 1.8rem;
   cursor: pointer;
   color: var(--text-muted);
+  line-height: 1;
 }
+
 .modal-body {
-  padding: 1rem;
+  padding: 1rem 1.2rem 1.2rem;
   overflow-y: auto;
-  flex: 1;
 }
+
 .form-row {
   margin-bottom: 1rem;
 }
+
 .form-row label {
   display: block;
-  margin-bottom: 0.3rem;
-  font-weight: 500;
+  margin-bottom: 0.45rem;
   color: var(--text-color);
+  font-weight: 600;
 }
-.form-row input,
-.form-row select {
+
+.form-row input {
   width: 100%;
-  padding: 0.5rem;
-  background: var(--input-bg);
-  border: var(--input-border);
-  border-radius: var(--input-border-radius);
-  color: var(--text-color);
-}
-.modal-footer {
-  padding: 1rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  border: var(--card-border);
   background: var(--header-footer-bg);
-  border-top: 1px solid var(--card-border);
+  color: var(--text-color);
+  outline: none;
+}
+
+.form-row input:focus {
+  box-shadow: 0 0 0 3px rgba(120, 120, 255, 0.15);
+}
+
+.hint {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(220, 53, 69, 0.12);
+  color: #ff9aa5;
+}
+
+.modal-footer {
+  margin-top: 1.2rem;
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 10px;
+  flex-wrap: wrap;
 }
-.btn-cancel, .btn-submit {
-  padding: 0.4rem 1rem;
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-}
-.btn-cancel {
-  background: #6c757d;
-  color: white;
-}
+
+.btn-cancel,
 .btn-submit {
-  background: var(--btn-primary-gradient);
+  border: none;
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-color);
+}
+
+.btn-submit {
+  background: var(--btn-primary-gradient, var(--accent-gradient));
   color: white;
 }
-.error-message {
-  color: var(--input-error-color);
-  margin-top: 0.5rem;
+
+@media (max-width: 576px) {
+  .modal-container {
+    max-width: 100%;
+    border-radius: 22px;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .btn-cancel,
+  .btn-submit {
+    width: 100%;
+  }
 }
 </style>
