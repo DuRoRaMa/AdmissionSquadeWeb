@@ -62,8 +62,8 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await apiClient.post('api/v1/users/register/', userData)
       return {
         success: true,
-        message: response.data.message || 'Регистрация успешна',
-        user: response.data,
+        message: response.data.message,
+        user: response.data.data,
       }
     } catch (error) {
       const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'Ошибка регистрации'
@@ -73,23 +73,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function forgotPassword(email) {
-    isLoading.value = true
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      return { success: true, message: 'Инструкция отправлена на почту' }
-    } finally {
-      isLoading.value = false
+  async function forgotPassword() {
+    return {
+      success: false,
+      message: 'Функция восстановления пароля пока не реализована'
     }
   }
 
-  async function resetPassword(data) {
-    isLoading.value = true
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      return { success: true, message: 'Пароль изменён' }
-    } finally {
-      isLoading.value = false
+  async function resetPassword() {
+    return {
+      success: false,
+      message: 'Функция сброса пароля пока не реализована'
     }
   }
 

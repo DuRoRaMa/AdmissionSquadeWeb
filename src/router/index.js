@@ -61,8 +61,11 @@ router.beforeEach(async (to, from, next) => {
       await userStore.fetchUser()
     }
     const squadId = to.params.id
-    const isCommander = userStore.user?.is_staff ||
-      userStore.user?.memberships?.some(m => m.squad == squadId && m.role_detail?.name === 'Командир')
+    const isCommander =
+      userStore.user?.is_staff ||
+      userStore.user?.memberships?.some(
+        m => String(m.squad) === String(squadId) && m.role_detail?.slug === 'commander'
+      )
     if (!isCommander) {
       next({ name: 'squads' })
       return
