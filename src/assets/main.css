@@ -389,3 +389,129 @@ textarea:hover:not(:disabled),
     max-width: 100%;
   }
 }
+/* ==========================================================================
+   App shell / layout
+   ========================================================================== */
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-main {
+  padding: 24px 0 32px;
+}
+
+.app-main__container--with-sidebar {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.app-main__standalone {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.app-content {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Sidebar
+   ========================================================================== */
+
+.app-sidebar {
+  position: sticky;
+  top: 92px;
+}
+
+.app-sidebar__card {
+  background: var(--card-bg-solid);
+  border-radius: 24px;
+  box-shadow: var(--card-shadow);
+  border: var(--card-border);
+  padding: 20px;
+}
+
+.app-sidebar__title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text-color);
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 16px;
+  transition: 0.2s ease;
+}
+
+.app-sidebar__link:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.app-sidebar__link.is-active {
+  color: #fff;
+  background: var(--accent-gradient);
+  box-shadow: 0 12px 24px rgba(102, 126, 234, 0.24);
+}
+
+@media (max-width: 1100px) {
+  .app-main__container--with-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    position: static;
+  }
+
+  .app-sidebar__nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 576px) {
+  .app-main {
+    padding: 16px 0 24px;
+  }
+
+  .app-main__container--with-sidebar,
+  .app-main__standalone {
+    padding: 0 12px;
+  }
+
+  .app-main__container--with-sidebar {
+    gap: 16px;
+  }
+
+  .app-sidebar__card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .app-sidebar__link {
+    width: 100%;
+  }
+}

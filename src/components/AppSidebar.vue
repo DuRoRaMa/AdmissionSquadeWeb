@@ -1,0 +1,70 @@
+<script setup>
+import { computed } from 'vue'
+import { useRoute, RouterLink } from 'vue-router'
+import useAuthStore from '@/stores/auth'
+import useUserStore from '@/stores/user'
+import { APP_SECTIONS, filterSectionItems } from '@/router/sections'
+
+const route = useRoute()
+const authStore = useAuthStore()
+const userStore = useUserStore()
+
+const isCommander = computed(() => {
+  if (userStore.user?.is_staff) return true
+
+  return (
+    userStore.user?.memberships?.some(
+      m =>
+        m.role_detail?.slug === 'commander' ||
+        m.role_detail?.name === 'Командир'
+    ) ?? false
+  )
+})
+
+const currentSection = computed(() => {
+  const sectionKey = route.meta.section
+  return APP_SECTIONS[sectionKey] ?? null
+})
+
+const items = computed(() => {
+  return filterSectionItems(currentSection.value, {
+    isAdmin: Boolean(userStore.user?.is_staff),
+    isCommander: isCommander.value,
+  })
+})
+
+const showSidebar = computed(() => {
+  return authStore.isAuthenticated && currentSection.value && items.value.length > 0
+})
+
+function isItemActive(item) {
+  if (Array.isArray(item.routeNames) && item.routeNames.length) {
+    return item.routeNames.includes(route.name)
+  }
+
+  return route.path === item.to
+}
+</script>
+
+<template>
+  <aside v-if="showSidebar" class="app-sidebar">
+    <div class="app-sidebar__card">
+      <div class="app-sidebar__title">
+        {{ currentSection.title }}
+      </div>
+
+      <nav class="app-sidebar__nav">
+        <RouterLink
+          v-for="item in items"
+          :key="item.to"
+          :to="item.to"
+          class="app-sidebar__link"
+          :class="{ 'is-active': isItemActive(item) }"
+        >
+          <i v-if="item.icon" :class="['bi', item.icon]" />
+          <span>{{ item.label }}</span>
+        </RouterLink>
+      </nav>
+    </div>
+  </aside>
+</template>
