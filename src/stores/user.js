@@ -1,26 +1,117 @@
-// stores/user.js
+// src/stores/user.js
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import apiClient from '../axios'
 import { useAuthStore } from './auth'
+
+function normalizePermissionCode(permission) {
+  if (!permission) return null
+
+  if (typeof permission === 'string') {
+    return permission.trim() || null
+  }
+
+  if (typeof permission === 'object') {
+    return permission.code?.trim() || null
+  }
+
+  return null
+}
+
+function extractRolePermissions(roleDetail) {
+  if (!roleDetail) return []
+
+  const permissions = Array.isArray(roleDetail.permissions)
+    ? roleDetail.permissions
+    : []
+
+  return permissions
+    .map(normalizePermissionCode)
+    .filter(Boolean)
+}
+
+function extractEffectivePermissions(rawUser) {
+  if (!rawUser) return []
+
+  const direct = Array.isArray(rawUser.effective_permissions)
+    ? rawUser.effective_permissions
+    : []
+
+  const fromMemberships = Array.isArray(rawUser.memberships)
+    ? rawUser.memberships.flatMap((membership) =>
+        extractRolePermissions(membership?.role_detail)
+      )
+    : []
+
+  return [...new Set([...direct.map(normalizePermissionCode), ...fromMemberships].filter(Boolean))]
+}
+
+function normalizeUser(rawUser) {
+  if (!rawUser) return null
+
+  return {
+    ...rawUser,
+    permission_codes: extractEffectivePermissions(rawUser),
+  }
+}
 
 export const useUserStore = defineStore('user', () => {
   const user = ref(null)
   const isLoading = ref(false)
 
-  // Загрузка профиля текущего пользователя
+  const permissionCodes = computed(() => user.value?.permission_codes ?? [])
+
+  const isAdmin = computed(() => Boolean(user.value?.is_staff))
+
+  function hasPermission(code) {
+    if (!code) return true
+    if (isAdmin.value) return true
+    return permissionCodes.value.includes(code)
+  }
+
+  function hasAnyPermission(codes = []) {
+    if (!codes.length) return true
+    if (isAdmin.value) return true
+    return codes.some((code) => hasPermission(code))
+  }
+
+  function hasAllPermissions(codes = []) {
+    if (!codes.length) return true
+    if (isAdmin.value) return true
+    return codes.every((code) => hasPermission(code))
+  }
+
+  function hasSquadPermission(code, squadId) {
+    if (!code) return true
+    if (isAdmin.value) return true
+    if (!user.value || !squadId) return false
+
+    const memberships = Array.isArray(user.value.memberships)
+      ? user.value.memberships
+      : []
+
+    return memberships.some((membership) => {
+      if (String(membership?.squad) !== String(squadId)) {
+        return false
+      }
+
+      const rolePermissions = extractRolePermissions(membership?.role_detail)
+      return rolePermissions.includes(code)
+    })
+  }
+
   async function fetchUser() {
     const authStore = useAuthStore()
     if (!authStore.token) return null
 
     isLoading.value = true
+
     try {
       const response = await apiClient.get('api/v1/users/me/')
-      user.value = response.data
+      user.value = normalizeUser(response.data)
       return user.value
     } catch (error) {
       if (error.response?.status === 401) {
-        // Если токен невалиден — выходим
         authStore.logout()
       }
       return null
@@ -29,13 +120,13 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  // Обновление данных пользователя (PATCH)
   async function updateUser(data) {
     isLoading.value = true
+
     try {
       const response = await apiClient.patch('api/v1/users/me/', data)
-      user.value = response.data
-      return response.data
+      user.value = normalizeUser(response.data)
+      return user.value
     } catch (error) {
       console.error('Update user error:', error)
       throw error
@@ -44,7 +135,6 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  // Очистка данных (при выходе)
   function clearUser() {
     user.value = null
   }
@@ -52,9 +142,16 @@ export const useUserStore = defineStore('user', () => {
   return {
     user,
     isLoading,
+    permissionCodes,
+    isAdmin,
     fetchUser,
     updateUser,
     clearUser,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    hasSquadPermission,
   }
 })
+
 export default useUserStore

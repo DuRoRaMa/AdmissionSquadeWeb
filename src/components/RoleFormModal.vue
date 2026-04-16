@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue'
-import apiClient from '@/axios'
+import rolesService from '@/services/roles.service'
 
 const props = defineProps({
   visible: Boolean,
@@ -27,14 +27,14 @@ const ruMap = {
 }
 
 function transliterate(text) {
-  return text
+  return String(text || '')
     .toLowerCase()
     .split('')
     .map(char => ruMap[char] ?? char)
     .join('')
 }
 
-function buildSlug(value) {
+function buildSlugFromName(value) {
   return transliterate(value)
     .trim()
     .replace(/[^a-z0-9\s-]/g, '')
@@ -43,11 +43,21 @@ function buildSlug(value) {
     .replace(/^-|-$/g, '')
 }
 
+function normalizeManualSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 function reset() {
   if (props.role) {
     form.value = {
       name: props.role.name || '',
-      slug: props.role.slug || buildSlug(props.role.name || '')
+      slug: props.role.slug || ''
     }
     editing.value = true
   } else {
@@ -64,13 +74,22 @@ function reset() {
 
 function handleNameInput() {
   if (!slugTouched.value) {
-    form.value.slug = buildSlug(form.value.name)
+    form.value.slug = buildSlugFromName(form.value.name)
   }
 }
 
 function handleSlugInput() {
   slugTouched.value = true
-  form.value.slug = buildSlug(form.value.slug)
+  form.value.slug = normalizeManualSlug(form.value.slug)
+}
+
+function extractErrorMessage(err) {
+  return (
+    err.response?.data?.slug?.[0] ||
+    err.response?.data?.name?.[0] ||
+    err.response?.data?.detail ||
+    'Ошибка сохранения'
+  )
 }
 
 async function submit() {
@@ -89,19 +108,15 @@ async function submit() {
 
   try {
     if (editing.value) {
-      await apiClient.patch(`/api/v1/users/roles/${props.role.id}/`, form.value)
+      await rolesService.updateRole(props.role.id, form.value)
     } else {
-      await apiClient.post('/api/v1/users/roles/', form.value)
+      await rolesService.createRole(form.value)
     }
 
     emit('saved')
     close()
   } catch (err) {
-    error.value =
-      err.response?.data?.slug?.[0] ||
-      err.response?.data?.name?.[0] ||
-      err.response?.data?.detail ||
-      'Ошибка сохранения'
+    error.value = extractErrorMessage(err)
   } finally {
     loading.value = false
   }
@@ -146,14 +161,17 @@ watch(() => props.visible, (val) => {
               @input="handleSlugInput"
             />
             <small class="hint">
-              Используется в правах доступа и API. Лучше короткое латинское значение.
+              Поле можно заполнять вручную. Рекомендуется короткое латинское значение,
+              например: <code>commander</code>, <code>member</code>, <code>admin</code>.
             </small>
           </div>
 
           <div v-if="error" class="error-message">{{ error }}</div>
 
           <div class="modal-footer">
-            <button class="btn-cancel" @click="close">Отмена</button>
+            <button class="btn-cancel" @click="close" :disabled="loading">
+              Отмена
+            </button>
             <button class="btn-submit" @click="submit" :disabled="loading">
               {{ loading ? 'Сохранение...' : 'Сохранить' }}
             </button>
@@ -283,6 +301,12 @@ watch(() => props.visible, (val) => {
 .btn-submit {
   background: var(--btn-primary-gradient, var(--accent-gradient));
   color: white;
+}
+
+.btn-cancel:disabled,
+.btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 @media (max-width: 576px) {

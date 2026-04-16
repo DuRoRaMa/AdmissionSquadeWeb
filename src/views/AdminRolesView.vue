@@ -1,23 +1,29 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import apiClient from '@/axios'
 import RoleFormModal from '@/components/RoleFormModal.vue'
 import { useConfirmModal } from '@/composables/useConfirmModal'
+import rolesService from '@/services/roles.service'
 
 const { confirm } = useConfirmModal()
 
 const roles = ref([])
 const loading = ref(false)
+const error = ref('')
 const showModal = ref(false)
 const selectedRole = ref(null)
+const deletingId = ref(null)
 
 async function fetchRoles() {
   loading.value = true
+  error.value = ''
+
   try {
-    const res = await apiClient.get('/api/v1/users/roles/')
-    roles.value = res.data
+    roles.value = await rolesService.getRoles()
   } catch (err) {
-    console.error(err)
+    console.error('Ошибка загрузки ролей:', err)
+    error.value =
+      err.response?.data?.detail ||
+      'Не удалось загрузить список ролей.'
   } finally {
     loading.value = false
   }
@@ -33,19 +39,31 @@ function openEditModal(role) {
   showModal.value = true
 }
 
+async function handleSaved() {
+  await fetchRoles()
+}
+
 async function deleteRole(role) {
   const ok = await confirm({
     title: 'Удаление роли',
-    message: `Удалить роль "${role.name}"? Это может повлиять на участников.`
+    message: `Удалить роль "${role.name}"? Это может повлиять на участников.`,
   })
 
   if (!ok) return
 
+  deletingId.value = role.id
+  error.value = ''
+
   try {
-    await apiClient.delete(`/api/v1/users/roles/${role.id}/`)
-    fetchRoles()
+    await rolesService.deleteRole(role.id)
+    await fetchRoles()
   } catch (err) {
-    alert('Ошибка удаления')
+    console.error('Ошибка удаления роли:', err)
+    error.value =
+      err.response?.data?.detail ||
+      'Не удалось удалить роль.'
+  } finally {
+    deletingId.value = null
   }
 }
 
@@ -59,8 +77,13 @@ onMounted(fetchRoles)
         <h1>Роли</h1>
         <p class="page-subtitle">Управление ролями доступа в системе</p>
       </div>
-      <button class="btn-create" @click="openCreateModal">+ Создать роль</button>
+
+      <button class="btn-create" @click="openCreateModal">
+        + Создать роль
+      </button>
     </div>
+
+    <div v-if="error" class="error-message">{{ error }}</div>
 
     <div v-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="roles.length === 0" class="empty">Нет ролей</div>
@@ -75,14 +98,28 @@ onMounted(fetchRoles)
             <th>Действия</th>
           </tr>
         </thead>
+
         <tbody>
           <tr v-for="r in roles" :key="r.id">
             <td>{{ r.id }}</td>
             <td>{{ r.name }}</td>
             <td><code>{{ r.slug }}</code></td>
             <td class="actions">
-              <button class="btn-edit" @click="openEditModal(r)">✏️</button>
-              <button class="btn-delete" @click="deleteRole(r)">🗑️</button>
+              <button
+                class="btn-edit"
+                @click="openEditModal(r)"
+                :disabled="deletingId === r.id"
+              >
+                ✏️
+              </button>
+
+              <button
+                class="btn-delete"
+                @click="deleteRole(r)"
+                :disabled="deletingId === r.id"
+              >
+                {{ deletingId === r.id ? '...' : '🗑️' }}
+              </button>
             </td>
           </tr>
         </tbody>
@@ -98,8 +135,21 @@ onMounted(fetchRoles)
         </div>
 
         <div class="role-actions">
-          <button class="btn-edit" @click="openEditModal(r)">Редактировать</button>
-          <button class="btn-delete text-btn" @click="deleteRole(r)">Удалить</button>
+          <button
+            class="btn-edit"
+            @click="openEditModal(r)"
+            :disabled="deletingId === r.id"
+          >
+            Редактировать
+          </button>
+
+          <button
+            class="btn-delete text-btn"
+            @click="deleteRole(r)"
+            :disabled="deletingId === r.id"
+          >
+            {{ deletingId === r.id ? 'Удаление...' : 'Удалить' }}
+          </button>
         </div>
       </div>
     </div>
@@ -107,7 +157,7 @@ onMounted(fetchRoles)
     <RoleFormModal
       v-model:visible="showModal"
       :role="selectedRole"
-      @saved="fetchRoles"
+      @saved="handleSaved"
     />
   </div>
 </template>
@@ -184,6 +234,12 @@ onMounted(fetchRoles)
   color: var(--text-color);
 }
 
+.btn-edit:disabled,
+.btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-delete {
   color: #dc3545;
 }
@@ -229,6 +285,14 @@ onMounted(fetchRoles)
 .empty {
   color: var(--text-muted);
   padding: 1rem 0;
+}
+
+.error-message {
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: rgba(220, 53, 69, 0.12);
+  color: #ff9aa5;
 }
 
 @media (max-width: 768px) {
