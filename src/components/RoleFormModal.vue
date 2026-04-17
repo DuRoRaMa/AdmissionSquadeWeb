@@ -64,7 +64,10 @@ watch(
     form.slug = role.slug || ''
     form.description = role.description || ''
     form.parent_id =
-      role.parent_id ?? role.parent?.id ?? ''
+      role.parent_id ??
+      role.parent_detail?.id ??
+      role.parent?.id ??
+      ''
     form.permissions = Array.isArray(role.permissions)
       ? [...role.permissions]
       : []

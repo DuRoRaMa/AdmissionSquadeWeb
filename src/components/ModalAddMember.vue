@@ -34,7 +34,7 @@
           <div v-if="error" class="error-message">{{ error }}</div>
           <div class="modal-footer">
             <button class="btn-cancel" @click="close" :disabled="loading">Отмена</button>
-            <button class="btn-submit" @click="submit" :disabled="loading || !form.user_id || !form.role_id">
+            <button class="btn-submit" @click="submit" :disabled="loading || !form.user_id">
               {{ loading ? 'Добавление...' : 'Добавить' }}
             </button>
           </div>
@@ -80,27 +80,38 @@ async function fetchUsers() {
 async function fetchRoles() {
   try {
     const res = await apiClient.get('/api/v1/users/roles/')
-    roles.value = res.data
+    roles.value = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : [])
   } catch (err) {
     console.error(err)
+    roles.value = []
+    error.value = 'Не удалось загрузить роли'
   }
 }
 
 async function submit() {
   loading.value = true
   error.value = ''
+
   try {
-    await apiClient.post(`/api/v1/squads/${props.squadId}/members/`, {
+    const payload = {
       user: form.value.user_id,
-      role: form.value.role_id,
       squad: props.squadId,
       ticket_number: form.value.ticket_number,
-      university: form.value.university
-    })
+      university: form.value.university,
+    }
+
+    if (form.value.role_id) {
+      payload.role = form.value.role_id
+    }
+
+    await apiClient.post(`/api/v1/squads/${props.squadId}/members/`, payload)
     emit('added')
     close()
   } catch (err) {
-    error.value = err.response?.data?.detail || 'Ошибка добавления'
+    error.value =
+      err.response?.data?.detail ||
+      err.response?.data?.message ||
+      'Ошибка добавления'
   } finally {
     loading.value = false
   }

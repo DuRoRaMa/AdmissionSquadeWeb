@@ -16,17 +16,19 @@ const currentSection = computed(() => {
 })
 
 const access = computed(() => ({
+  isAdmin: Boolean(userStore.isAdmin),
+
   hasAnyPermission(permissions = []) {
     if (!permissions.length) return true
     if (!authStore.isAuthenticated) return false
-    if (userStore.user?.is_staff) return true
+    if (userStore.isAdmin) return true
     return userStore.hasAnyPermission(permissions)
   },
 
   hasAllPermissions(permissions = []) {
     if (!permissions.length) return true
     if (!authStore.isAuthenticated) return false
-    if (userStore.user?.is_staff) return true
+    if (userStore.isAdmin) return true
     return userStore.hasAllPermissions(permissions)
   },
 }))

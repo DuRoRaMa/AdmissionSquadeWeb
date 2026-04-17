@@ -18,24 +18,30 @@ function normalizePermissionCode(permission) {
   return null
 }
 
+function normalizePermissionList(value) {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map(normalizePermissionCode)
+    .filter(Boolean)
+}
+
 function extractRolePermissions(roleDetail) {
   if (!roleDetail) return []
 
-  const permissions = Array.isArray(roleDetail.permissions)
-    ? roleDetail.permissions
-    : []
+  const effectivePermissions =
+    roleDetail.effective_permissions ??
+    roleDetail.resolved_permissions ??
+    roleDetail.permissions ??
+    []
 
-  return permissions
-    .map(normalizePermissionCode)
-    .filter(Boolean)
+  return normalizePermissionList(effectivePermissions)
 }
 
 function extractEffectivePermissions(rawUser) {
   if (!rawUser) return []
 
-  const direct = Array.isArray(rawUser.effective_permissions)
-    ? rawUser.effective_permissions
-    : []
+  const direct = normalizePermissionList(rawUser.effective_permissions)
 
   const fromMemberships = Array.isArray(rawUser.memberships)
     ? rawUser.memberships.flatMap((membership) =>
@@ -43,7 +49,7 @@ function extractEffectivePermissions(rawUser) {
       )
     : []
 
-  return [...new Set([...direct.map(normalizePermissionCode), ...fromMemberships].filter(Boolean))]
+  return [...new Set([...direct, ...fromMemberships])]
 }
 
 function normalizeUser(rawUser) {
@@ -51,6 +57,7 @@ function normalizeUser(rawUser) {
 
   return {
     ...rawUser,
+    memberships: Array.isArray(rawUser.memberships) ? rawUser.memberships : [],
     permission_codes: extractEffectivePermissions(rawUser),
   }
 }
@@ -60,7 +67,6 @@ export const useUserStore = defineStore('user', () => {
   const isLoading = ref(false)
 
   const permissionCodes = computed(() => user.value?.permission_codes ?? [])
-
   const isAdmin = computed(() => Boolean(user.value?.is_staff))
 
   function hasPermission(code) {
@@ -86,11 +92,7 @@ export const useUserStore = defineStore('user', () => {
     if (isAdmin.value) return true
     if (!user.value || !squadId) return false
 
-    const memberships = Array.isArray(user.value.memberships)
-      ? user.value.memberships
-      : []
-
-    return memberships.some((membership) => {
+    return user.value.memberships.some((membership) => {
       if (String(membership?.squad) !== String(squadId)) {
         return false
       }

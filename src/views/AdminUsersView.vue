@@ -2,16 +2,23 @@
   <div class="admin-users">
     <div class="page-header">
       <h1>Пользователи</h1>
+      <div v-if="!canViewUsers" class="empty">
+        Раздел пользователей доступен только администратору системы.
+      </div>
+
+      <div v-else-if="errorMessage" class="empty">
+        {{ errorMessage }}
+      </div>
       <div class="filters">
-        <input v-model="filters.search" placeholder="Поиск по email/имени" @input="debounceSearch" />
+        <input
+          v-model="filters.search"
+          placeholder="Поиск по email/имени"
+          @input="debounceSearch"
+        />
         <select v-model="filters.is_blocked">
           <option value="">Все статусы</option>
           <option value="true">Заблокированы</option>
           <option value="false">Активны</option>
-        </select>
-        <select v-model="filters.role">
-          <option value="">Все роли</option>
-          <option v-for="r in roles" :key="r.id" :value="r.name">{{ r.name }}</option>
         </select>
         <button @click="fetchUsers" class="btn-filter">Применить</button>
       </div>
@@ -60,80 +67,86 @@
     <UserEditModal
       v-model:visible="showEditModal"
       :user="selectedUser"
-      :roles="roles"
+      :roles="[]"
       @updated="fetchUsers"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import apiClient from '@/axios'
 import UserEditModal from '@/components/UserEditModal.vue'
 import { useConfirmModal } from '@/composables/useConfirmModal'
+import { useUserStore } from '@/stores/user'
 
 const { confirm } = useConfirmModal()
+const userStore = useUserStore()
 
 const users = ref([])
-const roles = ref([])
 const loading = ref(false)
-const filters = ref({ search: '', is_blocked: '', role: '' })
+const errorMessage = ref('')
+const filters = ref({ search: '', is_blocked: '' })
 const pagination = ref({ page: 1, totalPages: 1 })
 const showEditModal = ref(false)
 const selectedUser = ref(null)
 
+const canViewUsers = computed(() => userStore.isAdmin)
+
 let searchTimeout = null
 
 async function fetchUsers() {
+  if (!canViewUsers.value) return
+
   loading.value = true
+  errorMessage.value = ''
+
   try {
     const params = {
       page: pagination.value.page,
       search: filters.value.search || undefined,
       is_blocked: filters.value.is_blocked || undefined,
-      role: filters.value.role || undefined
     }
+
     const res = await apiClient.get('/api/v1/users/', { params })
-    // Предполагаем пагинированный ответ от DRF
+
     if (res.data.results) {
       users.value = res.data.results
-      pagination.value.totalPages = Math.ceil(res.data.count / 20) // если page_size=20
+      pagination.value.totalPages = Math.max(1, Math.ceil(res.data.count / 20))
     } else {
-      users.value = res.data
+      users.value = Array.isArray(res.data) ? res.data : []
       pagination.value.totalPages = 1
     }
   } catch (err) {
     console.error(err)
+    errorMessage.value = 'Не удалось загрузить список пользователей.'
   } finally {
     loading.value = false
   }
 }
 
-async function fetchRoles() {
-  const res = await apiClient.get('/api/v1/users/roles/')
-  roles.value = res.data
-}
-
 function getUserRole(user) {
   if (user.is_staff) return 'Администратор'
-  if (user.memberships?.length) {
-    return user.memberships[0].role_detail?.name || 'Участник'
-  }
-  return 'Участник'
+  return 'Пользователь'
 }
 
 async function toggleBlock(user) {
   const action = user.is_blocked ? 'разблокировать' : 'заблокировать'
   const ok = await confirm({
     title: `${action} пользователя`,
-    message: `Вы уверены, что хотите ${action} пользователя ${user.full_name || user.email}?`
+    message: `Вы уверены, что хотите ${action} пользователя ${user.full_name || user.email}?`,
   })
+
   if (!ok) return
+
   try {
-    await apiClient.patch(`/api/v1/users/${user.id}/`, { is_blocked: !user.is_blocked })
-    fetchUsers()
+    await apiClient.patch(`/api/v1/users/${user.id}/`, {
+      is_blocked: !user.is_blocked,
+    })
+    await fetchUsers()
   } catch (err) {
-    alert('Ошибка изменения статуса')
+    console.error(err)
+    window.alert('Ошибка изменения статуса')
   }
 }
 
@@ -149,20 +162,25 @@ function changePage(page) {
 
 function debounceSearch() {
   if (searchTimeout) clearTimeout(searchTimeout)
+
   searchTimeout = setTimeout(() => {
     pagination.value.page = 1
     fetchUsers()
-  }, 500)
+  }, 400)
 }
 
-watch(() => [filters.value.is_blocked, filters.value.role], () => {
-  pagination.value.page = 1
-  fetchUsers()
-})
+watch(
+  () => filters.value.is_blocked,
+  () => {
+    pagination.value.page = 1
+    fetchUsers()
+  }
+)
 
 onMounted(() => {
-  fetchRoles()
-  fetchUsers()
+  if (canViewUsers.value) {
+    fetchUsers()
+  }
 })
 </script>
 

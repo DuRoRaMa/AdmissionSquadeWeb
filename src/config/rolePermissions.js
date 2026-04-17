@@ -1,128 +1,96 @@
 export const ROLE_PERMISSION_GROUPS = [
   {
-    key: 'roles',
-    title: 'Роли и права',
-    description: 'Управление ролями, наследованием и доступом в системе.',
-    permissions: [
-      {
-        code: 'roles.view',
-        label: 'Просмотр ролей',
-        description: 'Открывать список ролей и просматривать их состав.',
-      },
-      {
-        code: 'roles.manage',
-        label: 'Управление ролями',
-        description: 'Создавать, редактировать и удалять роли.',
-      },
-    ],
-  },
-  {
-    key: 'users',
-    title: 'Пользователи',
-    description: 'Работа с профилями и назначением ролей.',
-    permissions: [
-      {
-        code: 'users.view',
-        label: 'Просмотр пользователей',
-        description: 'Открывать список пользователей и карточки профилей.',
-      },
-      {
-        code: 'users.manage',
-        label: 'Редактирование пользователей',
-        description: 'Изменять данные пользователей.',
-      },
-      {
-        code: 'users.assign_roles',
-        label: 'Назначение ролей',
-        description: 'Назначать и менять роли пользователям.',
-      },
-    ],
-  },
-  {
-    key: 'squads',
+    key: 'squad',
     title: 'Отряды',
-    description: 'Управление отрядами и их составом.',
+    description: 'Просмотр и управление отрядом.',
     permissions: [
       {
-        code: 'squads.view',
-        label: 'Просмотр отрядов',
-        description: 'Открывать список отрядов и карточки.',
+        code: 'squad.view_own',
+        label: 'Просмотр своего отряда',
+        description: 'Доступ к информации о своём отряде.',
       },
       {
-        code: 'squads.manage',
-        label: 'Управление отрядами',
-        description: 'Создавать и редактировать отряды.',
+        code: 'squad.manage',
+        label: 'Управление отрядом',
+        description: 'Редактирование отряда и доступ к экрану управления.',
+      },
+    ],
+  },
+  {
+    key: 'membership',
+    title: 'Состав отряда',
+    description: 'Вступление и управление участниками.',
+    permissions: [
+      {
+        code: 'membership.join_own',
+        label: 'Вступление в отряд',
+        description: 'Пользователь может вступить в отряд самостоятельно.',
       },
       {
-        code: 'squads.members.manage',
-        label: 'Управление составом отрядов',
-        description: 'Добавлять и удалять участников отряда.',
+        code: 'membership.manage',
+        label: 'Управление участниками',
+        description: 'Добавление, исключение и изменение данных участников.',
+      },
+    ],
+  },
+  {
+    key: 'fee',
+    title: 'Взносы',
+    description: 'Просмотр и управление взносами участников.',
+    permissions: [
+      {
+        code: 'fee.view_own',
+        label: 'Просмотр своих взносов',
+        description: 'Пользователь видит информацию по своим взносам.',
+      },
+      {
+        code: 'fee.manage',
+        label: 'Управление взносами',
+        description: 'Добавление, изменение и удаление взносов.',
       },
     ],
   },
   {
     key: 'availability',
     title: 'Доступность',
-    description: 'Формирование и обработка доступностей.',
+    description: 'Работа с формами доступности.',
     permissions: [
       {
-        code: 'availability.view',
-        label: 'Просмотр доступностей',
-        description: 'Смотреть формы и ответы по доступности.',
+        code: 'availability.respond_own',
+        label: 'Ответ на свою доступность',
+        description: 'Пользователь может отправлять свою доступность.',
       },
       {
         code: 'availability.manage',
         label: 'Управление формами доступности',
-        description: 'Создавать, изменять и публиковать формы.',
-      },
-      {
-        code: 'availability.submit',
-        label: 'Отправка своей доступности',
-        description: 'Заполнять собственную форму доступности.',
+        description: 'Создание, изменение и публикация форм доступности.',
       },
     ],
   },
   {
-    key: 'rosters',
+    key: 'roster',
     title: 'Графики',
-    description: 'Создание и сопровождение графиков.',
+    description: 'Просмотр и сопровождение графиков.',
     permissions: [
       {
-        code: 'rosters.view',
-        label: 'Просмотр графиков',
-        description: 'Открывать графики и смены.',
+        code: 'roster.view_own',
+        label: 'Просмотр своего графика',
+        description: 'Пользователь видит свой график.',
       },
       {
-        code: 'rosters.manage',
+        code: 'roster.view_all',
+        label: 'Просмотр всех графиков',
+        description: 'Просмотр опубликованных графиков всех участников.',
+      },
+      {
+        code: 'roster.manage',
         label: 'Управление графиками',
-        description: 'Создавать и редактировать графики.',
+        description: 'Создание, редактирование и сопровождение графиков.',
       },
       {
-        code: 'rosters.assign',
-        label: 'Назначение в график',
-        description: 'Распределять людей по сменам.',
-      },
-    ],
-  },
-  {
-    key: 'applications',
-    title: 'Заявки',
-    description: 'Работа с пользовательскими заявками и запросами.',
-    permissions: [
-      {
-        code: 'applications.view',
-        label: 'Просмотр заявок',
-        description: 'Смотреть список заявок и карточки.',
-      },
-      {
-        code: 'applications.manage',
-        label: 'Обработка заявок',
-        description: 'Менять статусы и принимать решения по заявкам.',
-      },
-      {
-        code: 'applications.create',
-        label: 'Создание своих заявок',
-        description: 'Пользователь может создавать собственные заявки.',
+        code: 'roster.publish',
+        label: 'Публикация графиков',
+        description: 'Публикация и открытие графиков для участников.',
       },
     ],
   },

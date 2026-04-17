@@ -21,13 +21,9 @@ const currentRole = ref(null)
 const search = ref('')
 const filter = ref('all')
 
-const canViewRoles = computed(
-  () => userStore.isAdmin || userStore.hasAnyPermission(['roles.view', 'roles.manage'])
-)
+const canViewRoles = computed(() => userStore.isAdmin)
 
-const canManageRoles = computed(
-  () => userStore.isAdmin || userStore.hasPermission('roles.manage')
-)
+const canManageRoles = computed(() => userStore.isAdmin)
 
 const filteredRoles = computed(() => {
   let items = [...roles.value]
@@ -37,7 +33,7 @@ const filteredRoles = computed(() => {
   } else if (filter.value === 'custom') {
     items = items.filter((role) => !role.is_system)
   } else if (filter.value === 'with-parent') {
-    items = items.filter((role) => role.parent_id || role.parent?.id)
+    items = items.filter((role) => Boolean(getParentId(role)))
   }
 
   const query = search.value.trim().toLowerCase()
@@ -48,7 +44,7 @@ const filteredRoles = computed(() => {
       role.name,
       role.slug,
       role.description,
-      role.parent?.name,
+      getParentName(role),
     ]
       .filter(Boolean)
       .join(' ')
@@ -61,7 +57,7 @@ const filteredRoles = computed(() => {
 const parentOptions = computed(() => {
   if (!currentRole.value?.id) return roles.value
 
-  return roles.value.filter((role) => role.id !== currentRole.value.id)
+  return roles.value.filter((role) => getRoleId(role) !== currentRole.value.id)
 })
 
 async function fetchRoles() {
@@ -152,9 +148,10 @@ async function handleDelete(role) {
 }
 
 function getParentLabel(role) {
-  if (role.parent?.name) return role.parent.name
+  const directName = getParentName(role)
+  if (directName) return directName
 
-  const parentId = role.parent_id
+  const parentId = getParentId(role)
   if (!parentId) return '—'
 
   return roles.value.find((item) => item.id === parentId)?.name || '—'
@@ -163,11 +160,26 @@ function getParentLabel(role) {
 function getDirectPermissions(role) {
   return Array.isArray(role.permissions) ? role.permissions : []
 }
+function getRoleId(role) {
+  return role?.id ?? null
+}
 
+function getParentId(role) {
+  return role?.parent_id ?? role?.parent_detail?.id ?? role?.parent?.id ?? null
+}
+
+function getParentName(role) {
+  return role?.parent_detail?.name ?? role?.parent?.name ?? null
+}
 function getResolvedPermissions(role) {
+  if (Array.isArray(role.effective_permissions) && role.effective_permissions.length) {
+    return role.effective_permissions
+  }
+
   if (Array.isArray(role.resolved_permissions) && role.resolved_permissions.length) {
     return role.resolved_permissions
   }
+
   return getDirectPermissions(role)
 }
 
@@ -215,7 +227,7 @@ onMounted(fetchRoles)
     <div v-if="!canViewRoles" class="state-card">
       <h2>Нет доступа</h2>
       <p>
-        Для просмотра раздела нужны права <code>roles.view</code> или <code>roles.manage</code>.
+        Раздел ролей доступен только администратору системы.
       </p>
     </div>
 

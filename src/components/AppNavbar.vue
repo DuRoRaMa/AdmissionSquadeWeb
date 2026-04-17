@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-
+import { APP_SECTIONS, filterSectionItems } from '@/router/sections'
 import useAuthStore from '@/stores/auth'
 import useUserStore from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
@@ -23,16 +23,18 @@ function isRegisterRoute() {
   return route.name === 'register'
 }
 
-const isCommander = computed(() => {
-  if (userStore.user?.is_staff) return true
+const access = computed(() => ({
+  isAdmin: userStore.isAdmin,
+  hasAnyPermission: userStore.hasAnyPermission,
+  hasAllPermissions: userStore.hasAllPermissions,
+}))
 
-  return (
-    userStore.user?.memberships?.some(
-      m =>
-        m.role_detail?.slug === 'commander' ||
-        m.role_detail?.name === 'Командир'
-    ) ?? false
-  )
+const visibleManageItems = computed(() =>
+  filterSectionItems(APP_SECTIONS.manage, access.value)
+)
+
+const manageLandingLink = computed(() => {
+  return visibleManageItems.value[0]?.to || '/dashboard/availability'
 })
 
 const sectionLinks = computed(() => {
@@ -45,10 +47,10 @@ const sectionLinks = computed(() => {
     { label: 'Отряды', to: '/my-squads', section: 'squads' },
   )
 
-  if (isCommander.value) {
+  if (visibleManageItems.value.length) {
     links.push({
       label: 'Управление',
-      to: userStore.user?.is_staff ? '/dashboard/users' : '/dashboard/availability',
+      to: manageLandingLink.value,
       section: 'manage',
     })
   }

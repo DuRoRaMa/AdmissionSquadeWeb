@@ -76,10 +76,18 @@ const genderOptions = [
 ]
 
 function resetForm() {
-  if (props.user) {
-    form.value = { ...props.user }
-  } else {
-    form.value = {}
+  const user = props.user || {}
+
+  form.value = {
+    email: user.email || '',
+    last_name: user.last_name || '',
+    first_name: user.first_name || '',
+    middle_name: user.middle_name || '',
+    phone: user.phone || '',
+    gender: user.gender || '',
+    birth_day: user.birth_day || '',
+    is_staff: Boolean(user.is_staff),
+    is_blocked: Boolean(user.is_blocked),
   }
 }
 

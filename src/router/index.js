@@ -20,6 +20,7 @@ import AdminAvailabilityFormsView from '@/views/admin/AdminAvailabilityFormsView
 import AdminSchedulesView from '@/views/admin/AdminSchedulesView.vue'
 import AdminChangeRequestsView from '@/views/admin/AdminChangeRequestsView.vue'
 import AdminScannerView from '@/views/admin/AdminScannerView.vue'
+import { ACCESS_GROUPS, PERMISSIONS } from '@/constants/permissions'
 
 import useAuthStore from '@/stores/auth'
 import useUserStore from '@/stores/user'
@@ -69,7 +70,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'work',
-      permissionsAny: ['availability.view_own', 'availability.submit_own'],
+      permissionsAny: ACCESS_GROUPS.AVAILABILITY_PAGE,
     },
   },
   {
@@ -79,7 +80,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'work',
-      permissionsAny: ['schedule.view_own', 'schedule.view_all'],
+      permissionsAny: ACCESS_GROUPS.MY_SCHEDULE_PAGE,
     },
   },
   {
@@ -89,7 +90,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'work',
-      permissionsAny: ['change_request.create_own', 'change_request.view_own'],
+      permissionsAny: ACCESS_GROUPS.MY_CHANGE_REQUESTS_PAGE,
     },
   },
 
@@ -101,7 +102,6 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'squads',
-      permissionsAny: ['squad.view_own', 'squad.manage'],
     },
   },
   {
@@ -120,7 +120,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'squads',
-      squadPermission: 'squad.manage',
+      squadPermission: PERMISSIONS.SQUAD_MANAGE,
     },
   },
 
@@ -132,7 +132,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['availability.form.manage'],
+      permissionsAny: ACCESS_GROUPS.MANAGE_AVAILABILITY,
     },
   },
   {
@@ -142,7 +142,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['schedule.manage'],
+      permissionsAny: ACCESS_GROUPS.MANAGE_SCHEDULES,
     },
   },
   {
@@ -152,7 +152,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['change_request.review'],
+      permissionsAny: ACCESS_GROUPS.MANAGE_CHANGE_REQUESTS,
     },
   },
   {
@@ -162,7 +162,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['attendance.scan'],
+      permissionsAny: ACCESS_GROUPS.MANAGE_SCANNER,
     },
   },
   {
@@ -172,7 +172,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['user.manage'],
+      requiresAdmin: true,
     },
   },
   {
@@ -182,7 +182,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['role.view', 'role.manage'],
+      requiresAdmin: true,
     },
   },
 
@@ -214,6 +214,11 @@ router.beforeEach(async (to, from, next) => {
 
   if (authStore.isAuthenticated && !userStore.user) {
     await userStore.fetchUser()
+  }
+
+  if (to.meta.requiresAdmin && !userStore.isAdmin) {
+    next({ name: 'home' })
+    return
   }
 
   if (to.meta.permissionsAny?.length && !userStore.hasAnyPermission(to.meta.permissionsAny)) {

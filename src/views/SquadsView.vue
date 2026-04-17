@@ -3,7 +3,7 @@
     <div class="page-header">
       <h1 class="page-title">Отряды</h1>
       <button
-        v-if="userStore.user?.is_staff"
+        v-if="userStore.isAdmin"
         class="btn-create"
         @click="showCreateModal = true"
       >
@@ -48,10 +48,13 @@ onMounted(async () => {
   await squadsStore.fetchSquads()
 })
 
-function handleJoined() {
-  squadsStore.fetchSquads()
-  userStore.fetchUser()
-  alert('Вы успешно вступили в отряд!')
+async function handleJoined() {
+  await Promise.all([
+    squadsStore.fetchSquads(),
+    userStore.fetchUser(),
+  ])
+
+  window.alert('Вы успешно вступили в отряд!')
 }
 
 function handleSquadCreated() {

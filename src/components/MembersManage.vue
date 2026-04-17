@@ -4,13 +4,13 @@
       <div>
         <h3 class="members-title">Участники отряда</h3>
         <p class="members-subtitle">
-          Здесь можно назначать роли участникам, менять номер билета и исключать из отряда.
+          Здесь можно менять номер билета, исключать участников и, для администратора, назначать роли.
         </p>
       </div>
 
       <button
         class="btn btn-primary"
-        :disabled="!canManageMembers"
+        :disabled="!canAddMembers"
         @click="showAddModal = true"
       >
         + Добавить участника
@@ -19,6 +19,11 @@
 
     <div v-if="!canManageMembers" class="notice-card">
       У тебя нет прав на изменение состава отряда. Доступен только просмотр.
+    </div>
+
+    <div v-else-if="canManageMembers && !canAddMembers" class="notice-card">
+      Добавление новых участников и назначение ролей сейчас доступны только администратору,
+      потому что backend-список пользователей и ролей открыт только для admin.
     </div>
 
     <div v-if="errorMessage" class="alert alert-error">
@@ -68,15 +73,17 @@
                   <AppSelect
                     v-model="member.role"
                     :options="roleOptions"
-                    :disabled="!canManageMembers || savingRoleId === member.id"
+                    :disabled="!canAssignRoles || savingRoleId === member.id"
                     @update:modelValue="handleRoleChange(member, $event)"
                   />
 
                   <div class="role-hint">
                     {{
-                      savingRoleId === member.id
-                        ? 'Сохраняем роль...'
-                        : getRoleName(member.role)
+                      !canAssignRoles
+                        ? 'Назначение ролей доступно только администратору'
+                        : savingRoleId === member.id
+                          ? 'Сохраняем роль...'
+                          : getRoleName(member.role)
                     }}
                   </div>
                 </div>
@@ -116,6 +123,7 @@
     </div>
 
     <ModalAddMember
+      v-if="canAddMembers"
       v-model:visible="showAddModal"
       :squad-id="squadId"
       @added="handleMemberAdded"
@@ -133,6 +141,7 @@ import ModalAddMember from './ModalAddMember.vue'
 import useAccess from '@/composables/useAccess'
 import { useConfirmModal } from '@/composables/useConfirmModal'
 import useUserStore from '@/stores/user'
+import { PERMISSIONS } from '@/constants/permissions'
 
 const props = defineProps({
   squadId: {
@@ -161,9 +170,17 @@ const successMessage = ref('')
 
 const canManageMembers = computed(() => {
   return (
-    canSquad('squad.manage', props.squadId) ||
-    canSquad('squads.members.manage', props.squadId)
+    canSquad(PERMISSIONS.SQUAD_MANAGE, props.squadId) ||
+    canSquad(PERMISSIONS.MEMBERSHIP_MANAGE, props.squadId)
   )
+})
+
+const canAddMembers = computed(() => {
+  return canManageMembers.value && userStore.isAdmin
+})
+
+const canAssignRoles = computed(() => {
+  return canManageMembers.value && userStore.isAdmin && roles.value.length > 0
 })
 
 const roleOptions = computed(() => [
@@ -183,10 +200,7 @@ function normalizeListPayload(data) {
 function normalizeMember(member) {
   return {
     ...member,
-    role:
-      member.role ??
-      member.role_detail?.id ??
-      null,
+    role: member.role ?? member.role_detail?.id ?? null,
     ticket_number: member.ticket_number ?? '',
   }
 }
@@ -213,6 +227,11 @@ async function fetchMembers() {
 }
 
 async function fetchRoles() {
+  if (!userStore.isAdmin) {
+    roles.value = []
+    return
+  }
+
   loadingRoles.value = true
 
   try {
@@ -229,7 +248,7 @@ async function fetchRoles() {
 
 async function refreshAccessIfNeeded() {
   try {
-    await userStore.initialize()
+    await userStore.fetchUser()
   } catch (error) {
     console.error('Ошибка обновления текущего профиля после смены роли:', error)
   }
@@ -241,7 +260,7 @@ function getRoleName(roleId) {
 }
 
 async function handleRoleChange(member, nextValue) {
-  if (!canManageMembers.value) return
+  if (!canAssignRoles.value) return
 
   const previousValue = member.role
   member.role = nextValue ?? null
@@ -276,7 +295,7 @@ async function updateTicket(member) {
       ticket_number: member.ticket_number || '',
     })
 
-    successMessage.value = `Номер билета для «${member.user_detail?.full_name || member.user || member.id}» обновлен.`
+    successMessage.value = `Номер билета для «${member.user_detail?.full_name || member.user || member.id}» обновлён.`
   } catch (error) {
     console.error(error)
     errorMessage.value = 'Не удалось обновить номер билета.'
@@ -301,7 +320,7 @@ async function removeMember(member) {
 
   try {
     await apiClient.delete(`/api/v1/squads/members/${member.id}/`)
-    successMessage.value = 'Участник исключен из отряда.'
+    successMessage.value = 'Участник исключён из отряда.'
     await fetchMembers()
     await refreshAccessIfNeeded()
   } catch (error) {
@@ -320,6 +339,10 @@ async function handleMemberAdded() {
 }
 
 async function bootstrap() {
+  if (!userStore.user) {
+    await userStore.fetchUser()
+  }
+
   await Promise.all([fetchMembers(), fetchRoles()])
 }
 
@@ -419,20 +442,17 @@ onMounted(bootstrap)
 .members-table th,
 .members-table td {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--card-border, #e5e7eb);
   text-align: left;
-  vertical-align: middle;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: top;
 }
 
-.members-table thead th {
+.members-table th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
   background: #f8fafc;
-  color: #475569;
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.members-table tbody tr:hover {
-  background: rgba(37, 99, 235, 0.03);
 }
 
 .member-main {
@@ -442,63 +462,49 @@ onMounted(bootstrap)
 
 .member-name {
   font-weight: 700;
-  color: var(--text-main, #1f2937);
+  color: #1f2937;
 }
 
 .member-meta {
   font-size: 0.85rem;
-  color: var(--text-muted, #6b7280);
+  color: #64748b;
 }
 
 .role-cell {
   display: grid;
   gap: 8px;
+  min-width: 220px;
 }
 
 .role-hint {
   font-size: 0.85rem;
-  color: var(--text-muted, #6b7280);
+  color: #64748b;
 }
 
 .ticket-input {
-  width: 100%;
-  min-width: 160px;
-  padding: 10px 12px;
+  width: 160px;
+  border: 1px solid #dbe4f0;
   border-radius: 12px;
-  border: 1px solid var(--card-border, #d1d5db);
-  background: #fff;
+  padding: 10px 12px;
   font: inherit;
-}
-
-.ticket-input:focus {
-  outline: none;
-  border-color: var(--brand-600, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .btn {
   border: none;
-  border-radius: 12px;
+  border-radius: 999px;
   padding: 10px 16px;
   font: inherit;
-  font-weight: 600;
   cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.btn:hover:not(:disabled) {
-  transform: translateY(-1px);
 }
 
 .btn:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
 }
 
 .btn-primary {
-  background: var(--brand-600, #2563eb);
-  color: #fff;
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #ffffff;
 }
 
 .btn-danger {
@@ -508,15 +514,5 @@ onMounted(bootstrap)
 
 .btn-small {
   padding: 8px 12px;
-}
-
-@media (max-width: 768px) {
-  .members-header {
-    flex-direction: column;
-  }
-
-  .members-header .btn {
-    width: 100%;
-  }
 }
 </style>
