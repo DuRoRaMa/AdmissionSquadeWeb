@@ -7,18 +7,21 @@ export const APP_SECTIONS = {
         to: '/availability',
         icon: 'bi-calendar-check',
         routeNames: ['availability'],
+        permissionsAny: ['availability.view_own', 'availability.submit_own'],
       },
       {
         label: 'Мой график',
         to: '/schedule',
         icon: 'bi-calendar3',
         routeNames: ['my-schedule'],
+        permissionsAny: ['schedule.view_own', 'schedule.view_all'],
       },
       {
         label: 'Мои заявки',
         to: '/schedule/requests',
         icon: 'bi-arrow-left-right',
         routeNames: ['schedule-requests'],
+        permissionsAny: ['change_request.create_own', 'change_request.view_own'],
       },
     ],
   },
@@ -31,6 +34,7 @@ export const APP_SECTIONS = {
         to: '/my-squads',
         icon: 'bi-people',
         routeNames: ['my-squads'],
+        permissionsAny: ['squad.view_own', 'squad.manage'],
       },
       {
         label: 'Все отряды',
@@ -49,53 +53,80 @@ export const APP_SECTIONS = {
         to: '/dashboard/availability',
         icon: 'bi-ui-checks-grid',
         routeNames: ['dashboard-availability'],
-        requiresCommander: true,
+        permissionsAny: ['availability.form.manage'],
       },
       {
         label: 'Графики',
         to: '/dashboard/schedules',
         icon: 'bi-table',
         routeNames: ['dashboard-schedules'],
-        requiresCommander: true,
+        permissionsAny: ['schedule.manage'],
       },
       {
         label: 'Заявки на изменения',
         to: '/dashboard/change-requests',
         icon: 'bi-pencil-square',
         routeNames: ['dashboard-change-requests'],
-        requiresCommander: true,
+        permissionsAny: ['change_request.review'],
       },
       {
         label: 'Сканер QR',
         to: '/dashboard/scanner',
         icon: 'bi-qr-code-scan',
         routeNames: ['dashboard-scanner'],
-        requiresCommander: true,
+        permissionsAny: ['attendance.scan'],
       },
       {
         label: 'Пользователи',
         to: '/dashboard/users',
         icon: 'bi-person-gear',
         routeNames: ['dashboard-users'],
-        requiresAdmin: true,
+        permissionsAny: ['user.manage'],
       },
       {
         label: 'Роли',
         to: '/dashboard/roles',
         icon: 'bi-shield-lock',
         routeNames: ['dashboard-roles'],
-        requiresAdmin: true,
+        permissionsAny: ['role.manage'],
       },
     ],
   },
 }
 
+function normalizeList(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : []
+}
+
+export function hasSectionItemAccess(item, access) {
+  if (!item) return false
+
+  const permissionsAny = normalizeList(item.permissionsAny)
+  const permissionsAll = normalizeList(item.permissionsAll)
+
+  if (!permissionsAny.length && !permissionsAll.length) {
+    return true
+  }
+
+  if (!access) {
+    return false
+  }
+
+  if (permissionsAny.length) {
+    const ok = access.hasAnyPermission(permissionsAny)
+    if (!ok) return false
+  }
+
+  if (permissionsAll.length) {
+    const ok = access.hasAllPermissions(permissionsAll)
+    if (!ok) return false
+  }
+
+  return true
+}
+
 export function filterSectionItems(section, access) {
   if (!section) return []
 
-  return section.items.filter(item => {
-    if (item.requiresAdmin && !access.isAdmin) return false
-    if (item.requiresCommander && !access.isCommander) return false
-    return true
-  })
+  return section.items.filter((item) => hasSectionItemAccess(item, access))
 }

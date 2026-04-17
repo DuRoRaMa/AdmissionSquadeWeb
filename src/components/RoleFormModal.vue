@@ -1,181 +1,333 @@
 <script setup>
-import { ref, watch } from 'vue'
-import rolesService from '@/services/roles.service'
+import { computed, reactive, watch } from 'vue'
 
 const props = defineProps({
-  visible: Boolean,
-  role: Object
+  modelValue: {
+    type: Boolean,
+    default: false,
+  },
+  mode: {
+    type: String,
+    default: 'create',
+  },
+  role: {
+    type: Object,
+    default: null,
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  parentOptions: {
+    type: Array,
+    default: () => [],
+  },
+  permissionGroups: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const emit = defineEmits(['update:visible', 'saved'])
+const emit = defineEmits(['update:modelValue', 'save'])
 
-const form = ref({
+const emptyForm = () => ({
   name: '',
-  slug: ''
+  slug: '',
+  description: '',
+  parent_id: '',
+  permissions: [],
 })
 
-const loading = ref(false)
-const error = ref('')
-const editing = ref(false)
-const slugTouched = ref(false)
+const form = reactive(emptyForm())
 
-const ruMap = {
-  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z',
-  и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
-  с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh',
-  щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya'
+const isEditMode = computed(() => props.mode === 'edit')
+
+const selectedPermissionCount = computed(() => form.permissions.length)
+
+const groupedCount = computed(() =>
+  props.permissionGroups.reduce((acc, group) => {
+    acc[group.key] = form.permissions.filter((code) =>
+      group.permissions.some((item) => item.code === code)
+    ).length
+    return acc
+  }, {})
+)
+
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (!isOpen) return
+
+    const role = props.role || {}
+
+    form.name = role.name || ''
+    form.slug = role.slug || ''
+    form.description = role.description || ''
+    form.parent_id =
+      role.parent_id ?? role.parent?.id ?? ''
+    form.permissions = Array.isArray(role.permissions)
+      ? [...role.permissions]
+      : []
+  },
+  { immediate: true }
+)
+
+function closeModal() {
+  emit('update:modelValue', false)
 }
 
-function transliterate(text) {
-  return String(text || '')
-    .toLowerCase()
-    .split('')
-    .map(char => ruMap[char] ?? char)
-    .join('')
-}
-
-function buildSlugFromName(value) {
-  return transliterate(value)
+function normalizeSlug(value) {
+  return value
     .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
-function normalizeManualSlug(value) {
-  return String(value || '')
-    .trim()
     .toLowerCase()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9-_]/g, '')
 }
 
-function reset() {
-  if (props.role) {
-    form.value = {
-      name: props.role.name || '',
-      slug: props.role.slug || ''
-    }
-    editing.value = true
-  } else {
-    form.value = {
-      name: '',
-      slug: ''
-    }
-    editing.value = false
+function validateForm() {
+  if (!form.name.trim()) {
+    return 'Укажи название роли.'
   }
 
-  slugTouched.value = false
-  error.value = ''
-}
-
-function handleNameInput() {
-  if (!slugTouched.value) {
-    form.value.slug = buildSlugFromName(form.value.name)
+  if (!form.slug.trim()) {
+    return 'Укажи slug.'
   }
+
+  const normalized = normalizeSlug(form.slug)
+  if (!normalized) {
+    return 'Slug должен содержать латинские буквы, цифры, дефис или _.'
+  }
+
+  if (normalized !== form.slug.trim().toLowerCase()) {
+    return 'Slug должен быть в lowercase и содержать только латиницу, цифры, дефис или _.'
+  }
+
+  return ''
 }
 
-function handleSlugInput() {
-  slugTouched.value = true
-  form.value.slug = normalizeManualSlug(form.value.slug)
+function togglePermission(code) {
+  if (form.permissions.includes(code)) {
+    form.permissions = form.permissions.filter((item) => item !== code)
+    return
+  }
+
+  form.permissions = [...form.permissions, code]
 }
 
-function extractErrorMessage(err) {
-  return (
-    err.response?.data?.slug?.[0] ||
-    err.response?.data?.name?.[0] ||
-    err.response?.data?.detail ||
-    'Ошибка сохранения'
+function groupIsFullySelected(group) {
+  return group.permissions.every((permission) =>
+    form.permissions.includes(permission.code)
   )
 }
 
-async function submit() {
-  if (!form.value.name.trim()) {
-    error.value = 'Название обязательно'
+function groupIsPartiallySelected(group) {
+  const selected = group.permissions.filter((permission) =>
+    form.permissions.includes(permission.code)
+  ).length
+
+  return selected > 0 && selected < group.permissions.length
+}
+
+function toggleGroup(group) {
+  const codes = group.permissions.map((item) => item.code)
+  const fullySelected = codes.every((code) => form.permissions.includes(code))
+
+  if (fullySelected) {
+    form.permissions = form.permissions.filter((code) => !codes.includes(code))
     return
   }
 
-  if (!form.value.slug.trim()) {
-    error.value = 'Slug обязателен'
+  form.permissions = [...new Set([...form.permissions, ...codes])]
+}
+
+function submitForm() {
+  const validationError = validateForm()
+  if (validationError) {
+    window.alert(validationError)
     return
   }
 
-  loading.value = true
-  error.value = ''
-
-  try {
-    if (editing.value) {
-      await rolesService.updateRole(props.role.id, form.value)
-    } else {
-      await rolesService.createRole(form.value)
-    }
-
-    emit('saved')
-    close()
-  } catch (err) {
-    error.value = extractErrorMessage(err)
-  } finally {
-    loading.value = false
-  }
+  emit('save', {
+    name: form.name.trim(),
+    slug: form.slug.trim().toLowerCase(),
+    description: form.description.trim(),
+    parent_id: form.parent_id || null,
+    permissions: [...new Set(form.permissions)],
+  })
 }
-
-function close() {
-  emit('update:visible', false)
-}
-
-watch(() => props.visible, (val) => {
-  if (val) reset()
-  else error.value = ''
-})
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="modal-overlay" @click.self="close">
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3>{{ editing ? 'Редактировать роль' : 'Создать роль' }}</h3>
-          <button class="close-btn" @click="close">&times;</button>
+    <div v-if="modelValue" class="role-modal-overlay" @click.self="closeModal">
+      <div class="role-modal">
+        <div class="role-modal__header">
+          <div>
+            <h2 class="role-modal__title">
+              {{ isEditMode ? 'Редактирование роли' : 'Создание роли' }}
+            </h2>
+            <p class="role-modal__subtitle">
+              Настрой название, slug, родительскую роль и набор разрешений.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="role-modal__close"
+            @click="closeModal"
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
         </div>
 
-        <div class="modal-body">
-          <div class="form-row">
-            <label>Название</label>
-            <input
-              v-model="form.name"
-              required
-              placeholder="Например: Командир"
-              @input="handleNameInput"
+        <div class="role-modal__body">
+          <div class="role-form-grid">
+            <div class="role-field">
+              <label class="role-field__label">Название роли</label>
+              <input
+                v-model="form.name"
+                type="text"
+                class="role-field__input"
+                placeholder="Например, Командир отряда"
+              />
+            </div>
+
+            <div class="role-field">
+              <label class="role-field__label">Slug</label>
+              <input
+                v-model="form.slug"
+                type="text"
+                class="role-field__input"
+                placeholder="commander"
+              />
+              <p class="role-field__hint">
+                Slug вводится вручную. Используй латиницу, цифры, дефис или _.
+              </p>
+            </div>
+          </div>
+
+          <div class="role-field">
+            <label class="role-field__label">Описание</label>
+            <textarea
+              v-model="form.description"
+              class="role-field__textarea"
+              rows="3"
+              placeholder="Кратко опиши, для чего нужна роль"
             />
           </div>
 
-          <div class="form-row">
-            <label>Slug</label>
-            <input
-              v-model="form.slug"
-              required
-              placeholder="Например: commander"
-              @input="handleSlugInput"
-            />
-            <small class="hint">
-              Поле можно заполнять вручную. Рекомендуется короткое латинское значение,
-              например: <code>commander</code>, <code>member</code>, <code>admin</code>.
-            </small>
+          <div class="role-field">
+            <label class="role-field__label">Родительская роль</label>
+            <select v-model="form.parent_id" class="role-field__input">
+              <option value="">Без родительской роли</option>
+              <option
+                v-for="option in parentOptions"
+                :key="option.id"
+                :value="option.id"
+              >
+                {{ option.name }}
+              </option>
+            </select>
+            <p class="role-field__hint">
+              Если выбрать родительскую роль, ее права будут наследоваться.
+            </p>
           </div>
 
-          <div v-if="error" class="error-message">{{ error }}</div>
-
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="close" :disabled="loading">
-              Отмена
-            </button>
-            <button class="btn-submit" @click="submit" :disabled="loading">
-              {{ loading ? 'Сохранение...' : 'Сохранить' }}
-            </button>
+          <div class="role-permissions-head">
+            <div>
+              <h3 class="role-permissions-head__title">Разрешения</h3>
+              <p class="role-permissions-head__text">
+                Выбрано: {{ selectedPermissionCount }}
+              </p>
+            </div>
           </div>
+
+          <div class="role-permission-groups">
+            <section
+              v-for="group in permissionGroups"
+              :key="group.key"
+              class="role-permission-group"
+            >
+              <div class="role-permission-group__header">
+                <div>
+                  <h4 class="role-permission-group__title">
+                    {{ group.title }}
+                  </h4>
+                  <p class="role-permission-group__description">
+                    {{ group.description }}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="role-group-toggle"
+                  @click="toggleGroup(group)"
+                >
+                  {{
+                    groupIsFullySelected(group)
+                      ? 'Снять всё'
+                      : 'Выбрать всё'
+                  }}
+                </button>
+              </div>
+
+              <div class="role-group-meta">
+                <span class="role-group-meta__count">
+                  Выбрано: {{ groupedCount[group.key] || 0 }}/{{ group.permissions.length }}
+                </span>
+                <span
+                  v-if="groupIsPartiallySelected(group)"
+                  class="role-group-meta__state"
+                >
+                  Частично выбрано
+                </span>
+              </div>
+
+              <label
+                v-for="permission in group.permissions"
+                :key="permission.code"
+                class="role-permission-item"
+              >
+                <input
+                  :checked="form.permissions.includes(permission.code)"
+                  type="checkbox"
+                  @change="togglePermission(permission.code)"
+                />
+                <div class="role-permission-item__content">
+                  <div class="role-permission-item__label">
+                    {{ permission.label }}
+                  </div>
+                  <div class="role-permission-item__description">
+                    {{ permission.description }}
+                  </div>
+                  <div class="role-permission-item__code">
+                    {{ permission.code }}
+                  </div>
+                </div>
+              </label>
+            </section>
+          </div>
+        </div>
+
+        <div class="role-modal__footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="loading"
+            @click="closeModal"
+          >
+            Отмена
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="loading"
+            @click="submitForm"
+          >
+            {{ loading ? 'Сохранение...' : isEditMode ? 'Сохранить' : 'Создать роль' }}
+          </button>
         </div>
       </div>
     </div>
@@ -183,144 +335,264 @@ watch(() => props.visible, (val) => {
 </template>
 
 <style scoped>
-.modal-overlay {
+.role-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgba(13, 27, 42, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
-  padding: 16px;
+  padding: 24px;
+  z-index: 1000;
 }
 
-.modal-container {
-  background: var(--card-bg-solid);
-  border-radius: var(--card-border-radius);
-  width: 100%;
-  max-width: 560px;
-  max-height: min(90vh, 820px);
+.role-modal {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--card-shadow);
-  overflow: hidden;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
 }
 
-.modal-header {
+.role-modal__header,
+.role-modal__footer {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.role-modal__footer {
+  border-bottom: none;
+  border-top: 1px solid #e5e7eb;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.2rem;
-  background: var(--header-footer-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: flex-end;
+  gap: 12px;
 }
 
-.modal-header h3 {
-  margin: 0;
-  color: var(--text-color);
-  font-size: clamp(1rem, 1.2vw, 1.15rem);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  line-height: 1;
-}
-
-.modal-body {
-  padding: 1rem 1.2rem 1.2rem;
+.role-modal__body {
+  padding: 24px;
   overflow-y: auto;
 }
 
-.form-row {
-  margin-bottom: 1rem;
+.role-modal__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
-.form-row label {
-  display: block;
-  margin-bottom: 0.45rem;
-  color: var(--text-color);
-  font-weight: 600;
+.role-modal__subtitle {
+  margin: 8px 0 0;
+  color: #64748b;
 }
 
-.form-row input {
-  width: 100%;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  border: var(--card-border);
-  background: var(--header-footer-bg);
-  color: var(--text-color);
-  outline: none;
-}
-
-.form-row input:focus {
-  box-shadow: 0 0 0 3px rgba(120, 120, 255, 0.15);
-}
-
-.hint {
-  display: block;
-  margin-top: 0.4rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.error-message {
-  margin-top: 0.5rem;
-  border-radius: 12px;
-  padding: 0.8rem 0.9rem;
-  background: rgba(220, 53, 69, 0.12);
-  color: #ff9aa5;
-}
-
-.modal-footer {
-  margin-top: 1.2rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.btn-cancel,
-.btn-submit {
+.role-modal__close {
   border: none;
-  border-radius: 14px;
-  padding: 0.8rem 1rem;
+  background: transparent;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.role-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.role-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.role-field {
+  margin-bottom: 16px;
+}
+
+.role-field__label {
+  display: block;
+  margin-bottom: 8px;
   font-weight: 600;
-  min-width: 120px;
 }
 
-.btn-cancel {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-color);
+.role-field__input,
+.role-field__textarea {
+  width: 100%;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
 }
 
-.btn-submit {
-  background: var(--btn-primary-gradient, var(--accent-gradient));
-  color: white;
+.role-field__input:focus,
+.role-field__textarea:focus {
+  outline: none;
+  border-color: #2b6cb0;
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.12);
 }
 
-.btn-cancel:disabled,
-.btn-submit:disabled {
-  opacity: 0.7;
+.role-field__hint {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.role-permissions-head {
+  margin: 8px 0 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.role-permissions-head__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.role-permissions-head__text {
+  margin: 4px 0 0;
+  color: #64748b;
+}
+
+.role-permission-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.role-permission-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.role-permission-group__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.role-permission-group__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.role-permission-group__description {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.role-group-toggle {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.role-group-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.role-permission-item {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.role-permission-item + .role-permission-item {
+  margin-top: 10px;
+}
+
+.role-permission-item__label {
+  font-weight: 600;
+}
+
+.role-permission-item__description {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.role-permission-item__code {
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: #2b6cb0;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn:disabled {
+  opacity: 0.65;
   cursor: not-allowed;
 }
 
-@media (max-width: 576px) {
-  .modal-container {
-    max-width: 100%;
-    border-radius: 22px;
+@media (max-width: 768px) {
+  .role-modal-overlay {
+    padding: 12px;
   }
 
-  .modal-footer {
+  .role-modal {
+    max-height: calc(100vh - 24px);
+  }
+
+  .role-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .role-modal__header,
+  .role-modal__body,
+  .role-modal__footer {
+    padding: 16px;
+  }
+
+  .role-permission-group__header {
     flex-direction: column;
   }
 
-  .btn-cancel,
-  .btn-submit {
+  .role-modal__footer {
+    flex-direction: column-reverse;
+  }
+
+  .btn {
     width: 100%;
   }
 }

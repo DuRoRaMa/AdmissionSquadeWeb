@@ -182,7 +182,7 @@ const routes = [
     meta: {
       requiresAuth: true,
       section: 'manage',
-      permissionsAny: ['role.manage'],
+      permissionsAny: ['role.view', 'role.manage'],
     },
   },
 

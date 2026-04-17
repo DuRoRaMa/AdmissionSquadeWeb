@@ -1,311 +1,630 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import api from '@/axios'
 import RoleFormModal from '@/components/RoleFormModal.vue'
-import { useConfirmModal } from '@/composables/useConfirmModal'
-import rolesService from '@/services/roles.service'
+import { ROLE_PERMISSION_GROUPS, getPermissionLabel } from '@/config/rolePermissions'
+import { useUserStore } from '@/stores/user'
 
-const { confirm } = useConfirmModal()
+const userStore = useUserStore()
 
 const roles = ref([])
 const loading = ref(false)
-const error = ref('')
-const showModal = ref(false)
-const selectedRole = ref(null)
+const saving = ref(false)
 const deletingId = ref(null)
+const errorMessage = ref('')
+const successMessage = ref('')
+
+const modalOpen = ref(false)
+const modalMode = ref('create')
+const currentRole = ref(null)
+
+const search = ref('')
+const filter = ref('all')
+
+const canViewRoles = computed(
+  () => userStore.isAdmin || userStore.hasAnyPermission(['roles.view', 'roles.manage'])
+)
+
+const canManageRoles = computed(
+  () => userStore.isAdmin || userStore.hasPermission('roles.manage')
+)
+
+const filteredRoles = computed(() => {
+  let items = [...roles.value]
+
+  if (filter.value === 'system') {
+    items = items.filter((role) => role.is_system)
+  } else if (filter.value === 'custom') {
+    items = items.filter((role) => !role.is_system)
+  } else if (filter.value === 'with-parent') {
+    items = items.filter((role) => role.parent_id || role.parent?.id)
+  }
+
+  const query = search.value.trim().toLowerCase()
+  if (!query) return items
+
+  return items.filter((role) => {
+    const haystack = [
+      role.name,
+      role.slug,
+      role.description,
+      role.parent?.name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return haystack.includes(query)
+  })
+})
+
+const parentOptions = computed(() => {
+  if (!currentRole.value?.id) return roles.value
+
+  return roles.value.filter((role) => role.id !== currentRole.value.id)
+})
 
 async function fetchRoles() {
+  if (!canViewRoles.value) return
+
   loading.value = true
-  error.value = ''
+  errorMessage.value = ''
 
   try {
-    roles.value = await rolesService.getRoles()
-  } catch (err) {
-    console.error('Ошибка загрузки ролей:', err)
-    error.value =
-      err.response?.data?.detail ||
-      'Не удалось загрузить список ролей.'
+    const { data } = await api.get('/users/roles/')
+    roles.value = Array.isArray(data) ? data : data.results || []
+  } catch (error) {
+    console.error(error)
+    errorMessage.value = 'Не удалось загрузить список ролей.'
   } finally {
     loading.value = false
   }
 }
 
 function openCreateModal() {
-  selectedRole.value = null
-  showModal.value = true
+  currentRole.value = null
+  modalMode.value = 'create'
+  modalOpen.value = true
 }
 
 function openEditModal(role) {
-  selectedRole.value = role
-  showModal.value = true
+  currentRole.value = role
+  modalMode.value = 'edit'
+  modalOpen.value = true
 }
 
-async function handleSaved() {
-  await fetchRoles()
+function closeModal() {
+  modalOpen.value = false
+  currentRole.value = null
 }
 
-async function deleteRole(role) {
-  const ok = await confirm({
-    title: 'Удаление роли',
-    message: `Удалить роль "${role.name}"? Это может повлиять на участников.`,
-  })
-
-  if (!ok) return
-
-  deletingId.value = role.id
-  error.value = ''
+async function handleSave(payload) {
+  saving.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
 
   try {
-    await rolesService.deleteRole(role.id)
+    if (modalMode.value === 'create') {
+      await api.post('/users/roles/', payload)
+      successMessage.value = 'Роль успешно создана.'
+    } else {
+      await api.patch(`/users/roles/${currentRole.value.id}/`, payload)
+      successMessage.value = 'Роль успешно обновлена.'
+    }
+
+    closeModal()
     await fetchRoles()
-  } catch (err) {
-    console.error('Ошибка удаления роли:', err)
-    error.value =
-      err.response?.data?.detail ||
+  } catch (error) {
+    console.error(error)
+    errorMessage.value =
+      error?.response?.data?.detail ||
+      'Не удалось сохранить роль.'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleDelete(role) {
+  if (role.is_system) {
+    window.alert('Системную роль нельзя удалить.')
+    return
+  }
+
+  const confirmed = window.confirm(`Удалить роль «${role.name}»?`)
+  if (!confirmed) return
+
+  deletingId.value = role.id
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await api.delete(`/users/roles/${role.id}/`)
+    roles.value = roles.value.filter((item) => item.id !== role.id)
+    successMessage.value = 'Роль удалена.'
+  } catch (error) {
+    console.error(error)
+    errorMessage.value =
+      error?.response?.data?.detail ||
       'Не удалось удалить роль.'
   } finally {
     deletingId.value = null
   }
 }
 
+function getParentLabel(role) {
+  if (role.parent?.name) return role.parent.name
+
+  const parentId = role.parent_id
+  if (!parentId) return '—'
+
+  return roles.value.find((item) => item.id === parentId)?.name || '—'
+}
+
+function getDirectPermissions(role) {
+  return Array.isArray(role.permissions) ? role.permissions : []
+}
+
+function getResolvedPermissions(role) {
+  if (Array.isArray(role.resolved_permissions) && role.resolved_permissions.length) {
+    return role.resolved_permissions
+  }
+  return getDirectPermissions(role)
+}
+
+function cutPermissions(role, mode = 'resolved') {
+  const permissions =
+    mode === 'direct'
+      ? getDirectPermissions(role)
+      : getResolvedPermissions(role)
+
+  return permissions.slice(0, 5)
+}
+
+function permissionCount(role, mode = 'resolved') {
+  const permissions =
+    mode === 'direct'
+      ? getDirectPermissions(role)
+      : getResolvedPermissions(role)
+
+  return permissions.length
+}
+
 onMounted(fetchRoles)
 </script>
 
 <template>
-  <div class="admin-roles">
-    <div class="page-header">
+  <section class="roles-page">
+    <div class="roles-page__header">
       <div>
-        <h1>Роли</h1>
-        <p class="page-subtitle">Управление ролями доступа в системе</p>
+        <h1 class="roles-page__title">Роли и права</h1>
+        <p class="roles-page__subtitle">
+          Управляй ролями, наследованием и разрешениями пользователей.
+        </p>
       </div>
 
-      <button class="btn-create" @click="openCreateModal">
-        + Создать роль
+      <button
+        v-if="canManageRoles"
+        type="button"
+        class="btn btn-primary"
+        @click="openCreateModal"
+      >
+        Создать роль
       </button>
     </div>
 
-    <div v-if="error" class="error-message">{{ error }}</div>
-
-    <div v-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="roles.length === 0" class="empty">Нет ролей</div>
-
-    <div v-else class="table-wrapper desktop-table">
-      <table class="roles-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Название</th>
-            <th>Slug</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          <tr v-for="r in roles" :key="r.id">
-            <td>{{ r.id }}</td>
-            <td>{{ r.name }}</td>
-            <td><code>{{ r.slug }}</code></td>
-            <td class="actions">
-              <button
-                class="btn-edit"
-                @click="openEditModal(r)"
-                :disabled="deletingId === r.id"
-              >
-                ✏️
-              </button>
-
-              <button
-                class="btn-delete"
-                @click="deleteRole(r)"
-                :disabled="deletingId === r.id"
-              >
-                {{ deletingId === r.id ? '...' : '🗑️' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="!canViewRoles" class="state-card">
+      <h2>Нет доступа</h2>
+      <p>
+        Для просмотра раздела нужны права <code>roles.view</code> или <code>roles.manage</code>.
+      </p>
     </div>
 
-    <div v-if="roles.length" class="mobile-cards">
-      <div v-for="r in roles" :key="r.id" class="role-card">
-        <div class="role-main">
-          <div class="role-name">{{ r.name }}</div>
-          <div class="role-meta">ID: {{ r.id }}</div>
-          <div class="role-meta">Slug: <code>{{ r.slug }}</code></div>
+    <template v-else>
+      <div class="toolbar-card">
+        <div class="toolbar-card__search">
+          <label class="field-label">Поиск</label>
+          <input
+            v-model="search"
+            type="text"
+            class="field-input"
+            placeholder="Название, slug, описание..."
+          />
         </div>
 
-        <div class="role-actions">
-          <button
-            class="btn-edit"
-            @click="openEditModal(r)"
-            :disabled="deletingId === r.id"
-          >
-            Редактировать
-          </button>
-
-          <button
-            class="btn-delete text-btn"
-            @click="deleteRole(r)"
-            :disabled="deletingId === r.id"
-          >
-            {{ deletingId === r.id ? 'Удаление...' : 'Удалить' }}
-          </button>
+        <div class="toolbar-card__filter">
+          <label class="field-label">Фильтр</label>
+          <select v-model="filter" class="field-input">
+            <option value="all">Все роли</option>
+            <option value="system">Системные</option>
+            <option value="custom">Пользовательские</option>
+            <option value="with-parent">С родительской ролью</option>
+          </select>
         </div>
       </div>
-    </div>
+
+      <div v-if="errorMessage" class="alert alert-error">
+        {{ errorMessage }}
+      </div>
+
+      <div v-if="successMessage" class="alert alert-success">
+        {{ successMessage }}
+      </div>
+
+      <div v-if="loading" class="state-card">
+        <p>Загрузка ролей...</p>
+      </div>
+
+      <div v-else-if="!filteredRoles.length" class="state-card">
+        <h2>Роли не найдены</h2>
+        <p>Попробуй изменить фильтр или создай первую роль.</p>
+      </div>
+
+      <div v-else class="roles-grid">
+        <article
+          v-for="role in filteredRoles"
+          :key="role.id"
+          class="role-card"
+        >
+          <div class="role-card__top">
+            <div>
+              <div class="role-card__badges">
+                <span class="badge badge-primary">{{ role.name }}</span>
+                <span v-if="role.is_system" class="badge badge-dark">Системная</span>
+                <span v-else class="badge badge-light">Пользовательская</span>
+              </div>
+
+              <div class="role-card__slug">
+                {{ role.slug }}
+              </div>
+            </div>
+
+            <div class="role-card__actions" v-if="canManageRoles">
+              <button
+                type="button"
+                class="btn btn-secondary btn-small"
+                @click="openEditModal(role)"
+              >
+                Изменить
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-danger btn-small"
+                :disabled="role.is_system || deletingId === role.id"
+                @click="handleDelete(role)"
+              >
+                {{ deletingId === role.id ? 'Удаление...' : 'Удалить' }}
+              </button>
+            </div>
+          </div>
+
+          <p class="role-card__description">
+            {{ role.description || 'Описание не заполнено.' }}
+          </p>
+
+          <div class="role-card__meta">
+            <div class="meta-item">
+              <span class="meta-item__label">Родительская роль</span>
+              <span class="meta-item__value">{{ getParentLabel(role) }}</span>
+            </div>
+
+            <div class="meta-item">
+              <span class="meta-item__label">Прямые права</span>
+              <span class="meta-item__value">{{ permissionCount(role, 'direct') }}</span>
+            </div>
+
+            <div class="meta-item">
+              <span class="meta-item__label">Эффективные права</span>
+              <span class="meta-item__value">{{ permissionCount(role, 'resolved') }}</span>
+            </div>
+          </div>
+
+          <div class="role-card__permissions">
+            <div class="role-card__permissions-title">Основные права</div>
+
+            <div class="chips">
+              <span
+                v-for="code in cutPermissions(role, 'resolved')"
+                :key="code"
+                class="chip"
+              >
+                {{ getPermissionLabel(code) }}
+              </span>
+
+              <span
+                v-if="permissionCount(role, 'resolved') > 5"
+                class="chip chip-muted"
+              >
+                +{{ permissionCount(role, 'resolved') - 5 }}
+              </span>
+
+              <span
+                v-if="permissionCount(role, 'resolved') === 0"
+                class="chip chip-muted"
+              >
+                Нет прав
+              </span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </template>
 
     <RoleFormModal
-      v-model:visible="showModal"
-      :role="selectedRole"
-      @saved="handleSaved"
+      v-model="modalOpen"
+      :mode="modalMode"
+      :role="currentRole"
+      :loading="saving"
+      :parent-options="parentOptions"
+      :permission-groups="ROLE_PERMISSION_GROUPS"
+      @save="handleSave"
     />
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.admin-roles {
-  padding: 1rem;
+.roles-page {
+  display: grid;
+  gap: 20px;
 }
 
-.page-header {
+.roles-page__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
 }
 
-.page-header h1 {
+.roles-page__title {
   margin: 0;
-}
-
-.page-subtitle {
-  margin: 0.35rem 0 0;
-  color: var(--text-muted);
-}
-
-.btn-create {
-  background: var(--btn-primary-gradient);
-  border: none;
-  border-radius: 50px;
-  padding: 0.6rem 1rem;
-  color: white;
-  cursor: pointer;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-}
-
-.roles-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--card-bg-solid);
-  border-radius: 20px;
-  overflow: hidden;
-}
-
-.roles-table th,
-.roles-table td {
-  padding: 0.85rem 1rem;
-  text-align: left;
-  border-bottom: 1px solid var(--card-border);
-}
-
-.roles-table th {
-  color: var(--text-muted);
+  font-size: 1.75rem;
   font-weight: 700;
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
+.roles-page__subtitle {
+  margin: 8px 0 0;
+  color: #64748b;
 }
 
-.btn-edit,
-.btn-delete {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--text-color);
+.toolbar-card,
+.state-card,
+.role-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
-.btn-edit:disabled,
-.btn-delete:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.toolbar-card {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
 }
 
-.btn-delete {
-  color: #dc3545;
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
-.mobile-cards {
-  display: none;
+.field-input {
+  width: 100%;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.state-card {
+  padding: 24px;
+}
+
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .role-card {
-  background: var(--card-bg-solid);
-  border: var(--card-border);
-  border-radius: 18px;
-  padding: 1rem;
-  box-shadow: var(--card-shadow);
-  margin-bottom: 0.9rem;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
 }
 
-.role-name {
-  font-weight: 700;
-  color: var(--text-color);
-  margin-bottom: 0.4rem;
-}
-
-.role-meta {
-  color: var(--text-muted);
-  margin-bottom: 0.3rem;
-}
-
-.role-actions {
-  margin-top: 0.9rem;
+.role-card__top {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.role-card__badges {
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.text-btn {
-  padding: 0.6rem 0.8rem;
-  border-radius: 12px;
-  border: var(--card-border);
+.role-card__slug {
+  margin-top: 10px;
+  font-size: 0.92rem;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.loading,
-.empty {
-  color: var(--text-muted);
-  padding: 1rem 0;
+.role-card__description {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
 }
 
-.error-message {
-  margin-bottom: 1rem;
+.role-card__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.meta-item {
+  padding: 12px;
   border-radius: 14px;
-  padding: 0.85rem 1rem;
-  background: rgba(220, 53, 69, 0.12);
-  color: #ff9aa5;
+  background: #f8fafc;
+}
+
+.meta-item__label {
+  display: block;
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.meta-item__value {
+  font-weight: 700;
+}
+
+.role-card__permissions-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 7px 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.chip-muted {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.badge-primary {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-dark {
+  background: #0f172a;
+  color: #fff;
+}
+
+.badge-light {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.alert {
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-weight: 500;
+}
+
+.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.alert-success {
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.role-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: #2b6cb0;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.btn-small {
+  padding: 8px 12px;
+  font-size: 0.92rem;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 1100px) {
+  .roles-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-  .desktop-table {
-    display: none;
+  .roles-page__header {
+    flex-direction: column;
   }
 
-  .mobile-cards {
-    display: block;
+  .toolbar-card {
+    grid-template-columns: 1fr;
   }
 
-  .btn-create {
+  .role-card__top {
+    flex-direction: column;
+  }
+
+  .role-card__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .role-card__actions {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .role-card__actions .btn {
+    flex: 1 1 auto;
   }
 }
 </style>

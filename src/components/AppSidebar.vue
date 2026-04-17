@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
+
 import useAuthStore from '@/stores/auth'
 import useUserStore from '@/stores/user'
 import { APP_SECTIONS, filterSectionItems } from '@/router/sections'
@@ -9,28 +10,29 @@ const route = useRoute()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 
-const isCommander = computed(() => {
-  if (userStore.user?.is_staff) return true
-
-  return (
-    userStore.user?.memberships?.some(
-      m =>
-        m.role_detail?.slug === 'commander' ||
-        m.role_detail?.name === 'Командир'
-    ) ?? false
-  )
-})
-
 const currentSection = computed(() => {
-  const sectionKey = route.meta.section
+  const sectionKey = route.meta?.section
   return APP_SECTIONS[sectionKey] ?? null
 })
 
+const access = computed(() => ({
+  hasAnyPermission(permissions = []) {
+    if (!permissions.length) return true
+    if (!authStore.isAuthenticated) return false
+    if (userStore.user?.is_staff) return true
+    return userStore.hasAnyPermission(permissions)
+  },
+
+  hasAllPermissions(permissions = []) {
+    if (!permissions.length) return true
+    if (!authStore.isAuthenticated) return false
+    if (userStore.user?.is_staff) return true
+    return userStore.hasAllPermissions(permissions)
+  },
+}))
+
 const items = computed(() => {
-  return filterSectionItems(currentSection.value, {
-    isAdmin: Boolean(userStore.user?.is_staff),
-    isCommander: isCommander.value,
-  })
+  return filterSectionItems(currentSection.value, access.value)
 })
 
 const showSidebar = computed(() => {
