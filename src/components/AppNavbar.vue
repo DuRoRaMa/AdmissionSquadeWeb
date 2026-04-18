@@ -28,6 +28,21 @@ const access = computed(() => ({
   hasAnyPermission: userStore.hasAnyPermission,
   hasAllPermissions: userStore.hasAllPermissions,
 }))
+const visibleWorkItems = computed(() =>
+  filterSectionItems(APP_SECTIONS.work, access.value)
+)
+
+const visibleSquadItems = computed(() =>
+  filterSectionItems(APP_SECTIONS.squads, access.value)
+)
+
+const workLandingLink = computed(() => {
+  return visibleWorkItems.value[0]?.to || '/availability'
+})
+
+const squadLandingLink = computed(() => {
+  return visibleSquadItems.value[0]?.to || '/squads'
+})
 
 const visibleManageItems = computed(() =>
   filterSectionItems(APP_SECTIONS.manage, access.value)
@@ -42,10 +57,21 @@ const sectionLinks = computed(() => {
 
   if (!authStore.isAuthenticated) return links
 
-  links.push(
-    { label: 'Работа', to: '/availability', section: 'work' },
-    { label: 'Отряды', to: '/my-squads', section: 'squads' },
-  )
+  if (visibleWorkItems.value.length) {
+    links.push({
+      label: 'Работа',
+      to: workLandingLink.value,
+      section: 'work',
+    })
+  }
+
+  if (visibleSquadItems.value.length) {
+    links.push({
+      label: 'Отряды',
+      to: squadLandingLink.value,
+      section: 'squads',
+    })
+  }
 
   if (visibleManageItems.value.length) {
     links.push({
