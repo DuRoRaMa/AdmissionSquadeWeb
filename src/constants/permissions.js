@@ -1,17 +1,15 @@
-// src/constants/permissions.js
-
 export const PERMISSIONS = {
-  SQUAD_VIEW_OWN: 'squad.view_own',
+  SQUAD_VIEW: 'squad.view',
   SQUAD_MANAGE: 'squad.manage',
 
   MEMBERSHIP_JOIN_OWN: 'membership.join_own',
   MEMBERSHIP_MANAGE: 'membership.manage',
 
-  AVAILABILITY_RESPOND_OWN: 'availability.respond_own',
-  AVAILABILITY_MANAGE: 'availability.manage',
-
   FEE_VIEW_OWN: 'fee.view_own',
   FEE_MANAGE: 'fee.manage',
+
+  AVAILABILITY_RESPOND_OWN: 'availability.respond_own',
+  AVAILABILITY_MANAGE: 'availability.manage',
 
   ROSTER_VIEW_OWN: 'roster.view_own',
   ROSTER_VIEW_ALL: 'roster.view_all',
@@ -39,7 +37,7 @@ export const ACCESS_GROUPS = {
   ],
 
   MY_SQUADS_PAGE: [
-    PERMISSIONS.SQUAD_VIEW_OWN,
+    PERMISSIONS.SQUAD_VIEW,
     PERMISSIONS.SQUAD_MANAGE,
     PERMISSIONS.MEMBERSHIP_JOIN_OWN,
     PERMISSIONS.MEMBERSHIP_MANAGE,

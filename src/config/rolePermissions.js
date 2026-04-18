@@ -2,23 +2,23 @@ export const ROLE_PERMISSION_GROUPS = [
   {
     key: 'squad',
     title: 'Отряды',
-    description: 'Просмотр и управление отрядом.',
+    description: 'Просмотр и управление отрядами.',
     permissions: [
       {
-        code: 'squad.view_own',
-        label: 'Просмотр своего отряда',
-        description: 'Доступ к информации о своём отряде.',
+        code: 'squad.view',
+        label: 'Просмотр отрядов',
+        description: 'Доступ к карточкам и данным отрядов.',
       },
       {
         code: 'squad.manage',
         label: 'Управление отрядом',
-        description: 'Редактирование отряда и доступ к экрану управления.',
+        description: 'Редактирование и управление отрядом.',
       },
     ],
   },
   {
     key: 'membership',
-    title: 'Состав отряда',
+    title: 'Участники',
     description: 'Вступление и управление участниками.',
     permissions: [
       {
@@ -29,24 +29,24 @@ export const ROLE_PERMISSION_GROUPS = [
       {
         code: 'membership.manage',
         label: 'Управление участниками',
-        description: 'Добавление, исключение и изменение данных участников.',
+        description: 'Добавление, изменение и исключение участников.',
       },
     ],
   },
   {
     key: 'fee',
     title: 'Взносы',
-    description: 'Просмотр и управление взносами участников.',
+    description: 'Просмотр и управление взносами.',
     permissions: [
       {
         code: 'fee.view_own',
         label: 'Просмотр своих взносов',
-        description: 'Пользователь видит информацию по своим взносам.',
+        description: 'Пользователь видит собственные взносы.',
       },
       {
         code: 'fee.manage',
         label: 'Управление взносами',
-        description: 'Добавление, изменение и удаление взносов.',
+        description: 'Создание, изменение и удаление взносов.',
       },
     ],
   },
@@ -57,13 +57,13 @@ export const ROLE_PERMISSION_GROUPS = [
     permissions: [
       {
         code: 'availability.respond_own',
-        label: 'Ответ на свою доступность',
-        description: 'Пользователь может отправлять свою доступность.',
+        label: 'Заполнение своей доступности',
+        description: 'Пользователь отправляет свою доступность.',
       },
       {
         code: 'availability.manage',
-        label: 'Управление формами доступности',
-        description: 'Создание, изменение и публикация форм доступности.',
+        label: 'Управление доступностью',
+        description: 'Создание и сопровождение форм доступности.',
       },
     ],
   },
@@ -75,22 +75,22 @@ export const ROLE_PERMISSION_GROUPS = [
       {
         code: 'roster.view_own',
         label: 'Просмотр своего графика',
-        description: 'Пользователь видит свой график.',
+        description: 'Пользователь видит только свои смены.',
       },
       {
         code: 'roster.view_all',
-        label: 'Просмотр всех графиков',
-        description: 'Просмотр опубликованных графиков всех участников.',
+        label: 'Просмотр общего графика',
+        description: 'Просмотр общего графика отряда.',
       },
       {
         code: 'roster.manage',
         label: 'Управление графиками',
-        description: 'Создание, редактирование и сопровождение графиков.',
+        description: 'Создание и редактирование графиков.',
       },
       {
         code: 'roster.publish',
         label: 'Публикация графиков',
-        description: 'Публикация и открытие графиков для участников.',
+        description: 'Публикация итогового графика.',
       },
     ],
   },
