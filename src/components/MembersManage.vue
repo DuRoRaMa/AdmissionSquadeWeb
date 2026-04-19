@@ -9,8 +9,8 @@
       </div>
 
       <button
+        v-if="canAddMembers"
         class="btn btn-primary"
-        :disabled="!canAddMembers"
         @click="showAddModal = true"
       >
         + Добавить участника
@@ -18,12 +18,11 @@
     </div>
 
     <div v-if="!canManageMembers" class="notice-card">
-      У тебя нет прав на изменение состава отряда. Доступен только просмотр.
+      У тебя нет прав на редактирование состава отряда. Доступен только просмотр участников.
     </div>
 
-    <div v-else-if="canManageMembers && !canAddMembers" class="notice-card">
-      Добавление новых участников и назначение ролей сейчас доступны только администратору,
-      потому что backend-список пользователей и ролей открыт только для admin.
+    <div v-else-if="canManageMembers && !canAssignRoles" class="notice-card">
+      Ты можешь управлять составом отряда, но назначение ролей сейчас доступно только системному администратору.
     </div>
 
     <div v-if="errorMessage" class="alert alert-error">
@@ -70,33 +69,46 @@
 
               <td>
                 <div class="role-cell">
-                  <AppSelect
-                    v-model="member.role"
-                    :options="roleOptions"
-                    :disabled="!canAssignRoles || savingRoleId === member.id"
-                    @update:modelValue="handleRoleChange(member, $event)"
-                  />
+                  <template v-if="canAssignRoles">
+                    <AppSelect
+                      v-model="member.role"
+                      :options="roleOptions"
+                      :disabled="savingRoleId === member.id"
+                      @update:modelValue="handleRoleChange(member, $event)"
+                    />
 
-                  <div class="role-hint">
-                    {{
-                      !canAssignRoles
-                        ? 'Назначение ролей доступно только администратору'
-                        : savingRoleId === member.id
-                          ? 'Сохраняем роль...'
-                          : getRoleName(member.role)
-                    }}
-                  </div>
+                    <div class="role-hint">
+                      {{ savingRoleId === member.id ? 'Сохраняем роль...' : getRoleName(member.role) }}
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <div class="readonly-pill">
+                      {{ getRoleName(member.role) }}
+                    </div>
+                    <div class="role-hint">
+                      Роль доступна только для просмотра
+                    </div>
+                  </template>
                 </div>
               </td>
 
               <td>
-                <input
-                  v-model="member.ticket_number"
-                  class="ticket-input"
-                  :disabled="!canManageMembers || savingTicketId === member.id"
-                  placeholder="Например, 123456"
-                  @blur="updateTicket(member)"
-                />
+                <template v-if="canManageMembers">
+                  <input
+                    v-model="member.ticket_number"
+                    class="ticket-input"
+                    :disabled="savingTicketId === member.id"
+                    placeholder="Например, 123456"
+                    @blur="updateTicket(member)"
+                  />
+                </template>
+
+                <template v-else>
+                  <span class="readonly-text">
+                    {{ member.ticket_number || '—' }}
+                  </span>
+                </template>
               </td>
 
               <td>
@@ -104,17 +116,23 @@
               </td>
 
               <td>
-                <button
-                  class="btn btn-danger btn-small"
-                  :disabled="!canManageMembers || removingId === member.id"
-                  @click="removeMember(member)"
-                >
-                  {{
-                    removingId === member.id
-                      ? 'Исключаем...'
-                      : 'Исключить'
-                  }}
-                </button>
+                <template v-if="canManageMembers">
+                  <button
+                    class="btn btn-danger btn-small"
+                    :disabled="removingId === member.id"
+                    @click="removeMember(member)"
+                  >
+                    {{
+                      removingId === member.id
+                        ? 'Исключаем...'
+                        : 'Исключить'
+                    }}
+                  </button>
+                </template>
+
+                <template v-else>
+                  <span class="readonly-text">—</span>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -366,7 +384,22 @@ onMounted(bootstrap)
   display: grid;
   gap: 18px;
 }
+.readonly-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.42rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  color: var(--text-main, #1f2937);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 
+.readonly-text {
+  color: var(--text-muted, #64748b);
+  font-size: 0.95rem;
+}
 .members-header {
   display: flex;
   align-items: flex-start;

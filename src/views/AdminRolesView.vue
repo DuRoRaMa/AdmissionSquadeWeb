@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import api from '@/axios'
+import apiClient from '@/axios'
 import RoleFormModal from '@/components/RoleFormModal.vue'
 import { ROLE_PERMISSION_GROUPS, getPermissionLabel } from '@/config/rolePermissions'
 import { useUserStore } from '@/stores/user'
@@ -67,7 +67,7 @@ async function fetchRoles() {
   errorMessage.value = ''
 
   try {
-    const { data } = await api.get('/users/roles/')
+    const { data } = await apiClient.get('/api/v1/users/roles/')
     roles.value = Array.isArray(data) ? data : data.results || []
   } catch (error) {
     console.error(error)
@@ -101,10 +101,10 @@ async function handleSave(payload) {
 
   try {
     if (modalMode.value === 'create') {
-      await api.post('/users/roles/', payload)
+      await apiClient.post('/api/v1/users/roles/', payload)
       successMessage.value = 'Роль успешно создана.'
     } else {
-      await api.patch(`/users/roles/${currentRole.value.id}/`, payload)
+      await apiClient.patch(`/api/v1/users/roles/${currentRole.value.id}/`, payload)
       successMessage.value = 'Роль успешно обновлена.'
     }
 
@@ -134,7 +134,7 @@ async function handleDelete(role) {
   successMessage.value = ''
 
   try {
-    await api.delete(`/users/roles/${role.id}/`)
+    await apiClient.delete(`/api/v1/users/roles/${role.id}/`)
     roles.value = roles.value.filter((item) => item.id !== role.id)
     successMessage.value = 'Роль удалена.'
   } catch (error) {
@@ -290,7 +290,7 @@ onMounted(fetchRoles)
               </div>
             </div>
 
-            <div class="role-card__actions" v-if="canManageRoles">
+            <div class="role-card__actions" v-if="canManageRoles && !role.is_system">
               <button
                 type="button"
                 class="btn btn-secondary btn-small"
@@ -302,7 +302,7 @@ onMounted(fetchRoles)
               <button
                 type="button"
                 class="btn btn-danger btn-small"
-                :disabled="role.is_system || deletingId === role.id"
+                :disabled="deletingId === role.id"
                 @click="handleDelete(role)"
               >
                 {{ deletingId === role.id ? 'Удаление...' : 'Удалить' }}

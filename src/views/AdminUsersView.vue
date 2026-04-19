@@ -32,7 +32,7 @@
             <th>ID</th>
             <th>Email</th>
             <th>ФИО</th>
-            <th>Роль</th>
+            <th>Роли и отряды</th>
             <th>Статус</th>
             <th>Действия</th>
           </tr>
@@ -42,17 +42,62 @@
             <td>{{ u.id }}</td>
             <td>{{ u.email }}</td>
             <td>{{ u.full_name }}</td>
-            <td>{{ getUserRole(u) }}</td>
+            <td class="roles-cell">
+              <div class="roles-stack">
+                <span
+                  v-if="u.is_staff"
+                  class="role-pill role-pill--admin"
+                >
+                  Системный администратор
+                </span>
+
+                <template v-if="getMembershipSummary(u).length">
+                  <div
+                    v-for="item in getMembershipSummary(u)"
+                    :key="`${u.id}-${item.squad_id}-${item.role_slug || 'no-role'}`"
+                    class="role-entry"
+                  >
+                    <span class="role-pill">
+                      {{ item.role_name || 'Без роли' }}
+                    </span>
+                    <span class="role-squad">
+                      {{ item.squad_name }}
+                    </span>
+                  </div>
+                </template>
+
+                <span
+                  v-else-if="!u.is_staff"
+                  class="role-empty"
+                >
+                  Нет членства в отрядах
+                </span>
+              </div>
+            </td>
             <td>
               <span :class="['status-badge', u.is_blocked ? 'blocked' : 'active']">
                 {{ u.is_blocked ? 'Заблокирован' : 'Активен' }}
               </span>
             </td>
-            <td>
-              <button class="btn-edit" @click="openEditModal(u)">✏️</button>
-              <button class="btn-block" @click="toggleBlock(u)" v-if="!u.is_staff">
-                {{ u.is_blocked ? 'Разблокировать' : 'Заблокировать' }}
-              </button>
+            <td class="actions-cell">
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="table-action"
+                  @click="openEditModal(u)"
+                >
+                  Редактировать
+                </button>
+
+                <button
+                  v-if="!u.is_staff"
+                  type="button"
+                  class="table-action table-action--danger"
+                  @click="toggleBlock(u)"
+                >
+                  {{ u.is_blocked ? 'Разблокировать' : 'Заблокировать' }}
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -125,9 +170,14 @@ async function fetchUsers() {
   }
 }
 
-function getUserRole(user) {
-  if (user.is_staff) return 'Администратор'
-  return 'Пользователь'
+function getMembershipSummary(user) {
+  const summary = user?.role_summary
+
+  if (!summary || summary.kind !== 'membership') {
+    return []
+  }
+
+  return Array.isArray(summary.memberships) ? summary.memberships : []
 }
 
 async function toggleBlock(user) {
@@ -246,20 +296,89 @@ onMounted(() => {
   background: #dc354520;
   color: #dc3545;
 }
-.btn-edit, .btn-block {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  margin-right: 0.5rem;
+.actions-cell {
+  white-space: nowrap;
 }
-.btn-block {
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.table-action {
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-color);
+  border-radius: 12px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.table-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.table-action--danger {
   color: #dc3545;
+  border-color: rgba(220, 53, 69, 0.2);
+  background: rgba(220, 53, 69, 0.05);
+}
+
+.table-action--danger:hover {
+  background: rgba(220, 53, 69, 0.09);
 }
 .pagination {
   display: flex;
   justify-content: center;
   gap: 1rem;
   margin-top: 1rem;
+}
+.roles-cell {
+  min-width: 260px;
+}
+
+.roles-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.role-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(107, 119, 229, 0.14);
+  border: 1px solid rgba(107, 119, 229, 0.28);
+  color: var(--text-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.role-pill--admin {
+  background: rgba(240, 82, 82, 0.12);
+  border-color: rgba(240, 82, 82, 0.24);
+}
+
+.role-squad {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.role-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 </style>
