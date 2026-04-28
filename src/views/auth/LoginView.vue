@@ -3,10 +3,10 @@
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import AppButton from '@/components/AppButton.vue'
-import AppInput from '@/components/AppInput.vue'
-import AppCard from '@/components/AppCard.vue'
-import AppAlert from '@/components/AppAlert.vue'
+import AppButton from '@/components/ui/AppButton.vue'
+import AppInput from '@/components/ui/AppInput.vue'
+import AppCard from '@/components/ui/AppCard.vue'
+import AppAlert from '@/components/ui/AppAlert.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()

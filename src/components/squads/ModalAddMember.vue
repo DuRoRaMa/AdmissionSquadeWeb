@@ -47,7 +47,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import apiClient from '@/axios'
-import AppSelect from '@/components/AppSelect.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 
 const props = defineProps({
   visible: Boolean,

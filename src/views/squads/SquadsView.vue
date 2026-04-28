@@ -36,8 +36,8 @@
 import { onMounted, ref } from 'vue'
 import { useSquadsStore } from '@/stores/squads'
 import { useUserStore } from '@/stores/user'
-import SquadCard from '@/components/SquadCard.vue'
-import ModalCreateSquad from '@/components/ModalCreateSquad.vue'
+import SquadCard from '@/components/squads/SquadCard.vue'
+import ModalCreateSquad from '@/components/squads/ModalCreateSquad.vue'
 
 const squadsStore = useSquadsStore()
 const userStore = useUserStore()

@@ -48,7 +48,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useUserStore } from '@/stores/user'
-import ModalExitRequest from '@/components/ModalExitRequest.vue'
+import ModalExitRequest from '@/components/squads/ModalExitRequest.vue'
 
 const userStore = useUserStore()
 const showModal = ref(false)

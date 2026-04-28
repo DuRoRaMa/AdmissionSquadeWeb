@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import AppCard from '@/components/AppCard.vue'
+import AppCard from '@/components/ui/AppCard.vue'
 import { useScheduleStore } from '@/stores/schedule'
 
 const scheduleStore = useScheduleStore()

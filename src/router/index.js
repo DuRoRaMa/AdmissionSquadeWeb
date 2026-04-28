@@ -2,17 +2,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
-import LoginView from '@/views/LoginView.vue'
-import ForgotPasswordView from '../views/ForgotPasswordView.vue'
-import ProfileView from '../views/ProfileView.vue'
-import ResetPasswordView from '../views/ResetPasswordView.vue'
-import RegisterView from '../views/RegisterView.vue'
+import LoginView from '@/views/auth/LoginView.vue'
+import ForgotPasswordView from '../views/auth/ForgotPasswordView.vue'
+import ProfileView from '../views/profile/ProfileView.vue'
+import ResetPasswordView from '../views/auth/ResetPasswordView.vue'
+import RegisterView from '../views/auth/RegisterView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
-import SquadsView from '@/views/SquadsView.vue'
-import MySquadsView from '@/views/MySquadsView.vue'
-import SquadManageView from '@/views/SquadManageView.vue'
-import AdminUsersView from '@/views/AdminUsersView.vue'
-import AdminRolesView from '@/views/AdminRolesView.vue'
+import SquadsView from '@/views/squads/SquadsView.vue'
+import MySquadsView from '@/views/squads/MySquadsView.vue'
+import SquadManageView from '@/views/squads/SquadManageView.vue'
+import AdminUsersView from '@/views/admin/AdminUsersView.vue'
+import AdminRolesView from '@/views/admin/AdminRolesView.vue'
 import MyAvailabilityView from '@/views/availability/MyAvailabilityView.vue'
 import MyScheduleView from '@/views/schedule/MyScheduleView.vue'
 import MyScheduleRequestsView from '@/views/schedule/MyScheduleRequestsView.vue'
@@ -20,6 +20,7 @@ import AdminAvailabilityFormsView from '@/views/admin/AdminAvailabilityFormsView
 import AdminSchedulesView from '@/views/admin/AdminSchedulesView.vue'
 import AdminChangeRequestsView from '@/views/admin/AdminChangeRequestsView.vue'
 import AdminScannerView from '@/views/admin/AdminScannerView.vue'
+import AdminScheduleEditView from '@/views/admin/AdminScheduleEditView.vue'
 import { ACCESS_GROUPS, PERMISSIONS } from '@/constants/permissions'
 
 import useAuthStore from '@/stores/auth'
@@ -133,6 +134,16 @@ const routes = [
       requiresAuth: true,
       section: 'manage',
       permissionsAny: ACCESS_GROUPS.MANAGE_AVAILABILITY,
+    },
+  },
+  {
+    path: '/dashboard/schedules/:id/edit',
+    name: 'dashboard-schedule-edit',
+    component: AdminScheduleEditView,
+    meta: {
+      requiresAuth: true,
+      section: 'manage',
+      permissionsAny: ACCESS_GROUPS.MANAGE_SCHEDULES,
     },
   },
   {

@@ -30,7 +30,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppNavbar from '@/components/AppNavbar.vue'
-import AppSidebar from '@/components/AppSidebar.vue'
+import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { useThemeStore } from '@/stores/theme'
 import useAuthStore from '@/stores/auth'
 import { APP_SECTIONS } from '@/router/sections'

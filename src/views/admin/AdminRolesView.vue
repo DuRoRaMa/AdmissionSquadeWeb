@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import apiClient from '@/axios'
-import RoleFormModal from '@/components/RoleFormModal.vue'
+import RoleFormModal from '@/components/roles/RoleFormModal.vue'
 import { ROLE_PERMISSION_GROUPS, getPermissionLabel } from '@/config/rolePermissions'
 import { useUserStore } from '@/stores/user'
 

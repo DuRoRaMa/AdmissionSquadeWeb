@@ -1,6 +1,6 @@
 // composables/useConfirmModal.js
 import { createApp, ref } from 'vue'
-import ConfirmModal from '@/components/ConfirmModal.vue'
+import ConfirmModal from '@/components/ui/ConfirmModal.vue'
 
 let modalInstance = null
 

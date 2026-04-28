@@ -121,7 +121,7 @@
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
 import apiClient from '@/axios'
-import UserEditModal from '@/components/UserEditModal.vue'
+import UserEditModal from '@/components/users/UserEditModal.vue'
 import { useConfirmModal } from '@/composables/useConfirmModal'
 import { useUserStore } from '@/stores/user'
 

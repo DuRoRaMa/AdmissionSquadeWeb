@@ -455,29 +455,7 @@ async function loadData() {
     squadsStore.fetchSquads(),
   ])
 }
-async function downloadResponsesExport(item) {
-  const response = await apiClient.get(
-    `/api/v1/rosters/forms/${item.id}/responses/export/`,
-    {
-      responseType: 'blob',
-    },
-  )
 
-  const blob = new Blob([response.data], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
-
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-
-  link.href = url
-  link.download = `${item.title || 'Форма доступности'}.xlsx`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-
-  window.URL.revokeObjectURL(url)
-}
 onMounted(loadData)
 </script>
 
@@ -597,7 +575,7 @@ onMounted(loadData)
 
           <button
             type="button"
-            class="primary-button"
+            class="secondary-button"
             @click="addDay"
           >
             Добавить день вручную
@@ -736,7 +714,7 @@ onMounted(loadData)
 
         <button
           type="button"
-          class="primary-button"
+          class="secondary-button"
           @click="availabilityStore.fetchForms"
         >
           Обновить
@@ -829,13 +807,6 @@ onMounted(loadData)
                     @click="handleCloseForm(item)"
                   >
                     Закрыть
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline-secondary btn-sm"
-                    @click="downloadResponsesExport(item)"
-                  >
-                    Скачать
                   </button>
                 </div>
               </td>

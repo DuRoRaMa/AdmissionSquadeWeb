@@ -153,7 +153,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import apiClient from '@/axios'
-import AppSelect from '@/components/AppSelect.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import ModalAddMember from './ModalAddMember.vue'
 
 import useAccess from '@/composables/useAccess'

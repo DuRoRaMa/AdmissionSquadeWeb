@@ -1,15 +1,19 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import AppCard from '@/components/AppCard.vue'
-import AppSelect from '@/components/AppSelect.vue'
+import { useRouter } from 'vue-router'
 import { useScheduleStore } from '@/stores/schedule'
 import apiClient from '@/axios'
+import ScheduleCreateCard from '@/components/schedules/ScheduleCreateCard.vue'
+import ScheduleNeedsEditor from '@/components/schedules/ScheduleNeedsEditor.vue'
+import SchedulesTable from '@/components/schedules/SchedulesTable.vue'
 
 const scheduleStore = useScheduleStore()
+const router = useRouter()
 
 const squads = ref([])
 const workBlocks = ref([])
 const needRows = ref([])
+const availabilityForms = ref([])
 const isSubmitting = ref(false)
 const feedback = ref({
   type: '',
@@ -21,6 +25,7 @@ const form = ref(createInitialForm())
 function createInitialForm() {
   return {
     squad: '',
+    availability_form: '',
     title: '',
     period_start: '',
     period_end: '',
@@ -30,11 +35,15 @@ function createInitialForm() {
 function createNeedRow(source = {}) {
   return {
     local_id: source.local_id ?? `${Date.now()}-${Math.random()}`,
-    date: source.date ?? '',
     work_block: source.work_block ?? '',
     starts_at: normalizeInputTime(source.starts_at ?? '09:00'),
     ends_at: normalizeInputTime(source.ends_at ?? '15:00'),
     required_people: source.required_people ?? 1,
+
+    new_block_open: false,
+    new_block_code: '',
+    new_block_name: '',
+    is_creating_block: false,
   }
 }
 
@@ -80,12 +89,27 @@ const squadOptions = computed(() =>
   })),
 )
 
-const dateOptions = computed(() =>
-  buildDateRange(form.value.period_start, form.value.period_end).map((date) => ({
-    value: date,
-    label: formatDayLabel(date),
+const closedAvailabilityForms = computed(() => {
+  return availabilityForms.value.filter((item) => {
+    const sameSquad = Number(item.squad) === Number(form.value.squad)
+    const isClosed = item.status === 'closed'
+
+    return sameSquad && isClosed
+  })
+})
+
+const availabilityFormOptions = computed(() =>
+  closedAvailabilityForms.value.map((item) => ({
+    value: item.id,
+    label: `${item.title} — ${formatPeriod(item.period_start, item.period_end)}`,
   })),
 )
+
+const selectedAvailabilityForm = computed(() => {
+  return availabilityForms.value.find(
+    (item) => Number(item.id) === Number(form.value.availability_form),
+  )
+})
 
 const workBlockOptions = computed(() =>
   workBlocks.value.map((item) => ({
@@ -98,16 +122,10 @@ const totalRequiredPeople = computed(() =>
   needRows.value.reduce((sum, row) => sum + Number(row.required_people || 0), 0),
 )
 
-function formatDayLabel(date) {
-  const label = new Intl.DateTimeFormat('ru-RU', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
-
-  return label.charAt(0).toUpperCase() + label.slice(1)
-}
+const totalRequiredPeopleForPeriod = computed(() => {
+  const daysCount = buildDateRange(form.value.period_start, form.value.period_end).length
+  return totalRequiredPeople.value * daysCount
+})
 
 function formatShortDate(date) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -122,25 +140,20 @@ function formatPeriod(start, end) {
   return `${formatShortDate(start)} — ${formatShortDate(end)}`
 }
 
-function getStatusLabel(status) {
-  const map = {
-    draft: 'Черновик',
-    published: 'Опубликован',
-  }
-  return map[status] || status
-}
+async function fetchAvailabilityForms() {
+  try {
+    const response = await apiClient.get('/api/v1/rosters/forms/')
+    availabilityForms.value = Array.isArray(response.data)
+      ? response.data
+      : response.data?.results || []
+  } catch (error) {
+    availabilityForms.value = []
 
-function getStatusClass(status) {
-  return {
-    'status-pill': true,
-    'status-pill--draft': status === 'draft',
-    'status-pill--published': status === 'published',
+    feedback.value = {
+      type: 'error',
+      text: error.response?.data?.detail || 'Не удалось загрузить формы доступности',
+    }
   }
-}
-
-function formatSquadName(squadId) {
-  const squad = squads.value.find((item) => item.id === squadId)
-  return squad?.name || `Отряд #${squadId}`
 }
 
 async function fetchSquads() {
@@ -182,6 +195,10 @@ watch(
   () => form.value.squad,
   async (newSquad, oldSquad) => {
     if (newSquad !== oldSquad) {
+      form.value.availability_form = ''
+      form.value.period_start = ''
+      form.value.period_end = ''
+
       needRows.value = needRows.value.map((row) => ({
         ...row,
         work_block: '',
@@ -193,30 +210,33 @@ watch(
 )
 
 watch(
-  () => [form.value.period_start, form.value.period_end],
+  () => form.value.availability_form,
   () => {
-    const validDates = new Set(buildDateRange(form.value.period_start, form.value.period_end))
-    needRows.value = needRows.value.map((row) => ({
-      ...row,
-      date: validDates.has(row.date) ? row.date : '',
-    }))
+    const selectedForm = selectedAvailabilityForm.value
+
+    if (!selectedForm) {
+      form.value.period_start = ''
+      form.value.period_end = ''
+      needRows.value = []
+      return
+    }
+
+    form.value.period_start = selectedForm.period_start
+    form.value.period_end = selectedForm.period_end
   },
 )
 
 function addNeedRow() {
-  if (!form.value.period_start || !form.value.period_end) {
+  if (!form.value.availability_form || !form.value.period_start || !form.value.period_end) {
     feedback.value = {
       type: 'error',
-      text: 'Сначала выбери период графика, затем добавляй потребности.',
+      text: 'Сначала выбери закрытую форму доступности, затем добавляй потребности.',
     }
+
     return
   }
 
-  needRows.value.push(
-    createNeedRow({
-      date: dateOptions.value[0]?.value || '',
-    }),
-  )
+  needRows.value.push(createNeedRow())
 }
 
 function removeNeedRow(localId) {
@@ -228,35 +248,61 @@ function validateForm() {
     feedback.value = { type: 'error', text: 'Выбери отряд.' }
     return false
   }
+  if (!form.value.availability_form) {
+    feedback.value = {
+      type: 'error',
+      text: 'Выбери закрытую форму доступности.',
+    }
 
+    return false
+  }
   if (!form.value.title.trim()) {
     feedback.value = { type: 'error', text: 'Укажи название графика.' }
     return false
   }
 
   if (!form.value.period_start || !form.value.period_end) {
-    feedback.value = { type: 'error', text: 'Укажи период графика.' }
+    feedback.value = {
+      type: 'error',
+      text: 'Период графика не определён. Проверь выбранную форму доступности.',
+    }
     return false
   }
 
   for (const row of needRows.value) {
-    if (!row.date) {
-      feedback.value = { type: 'error', text: 'У каждой потребности должна быть указана дата.' }
-      return false
-    }
-
     if (!row.work_block) {
-      feedback.value = { type: 'error', text: 'У каждой потребности должен быть выбран блок работ.' }
+      feedback.value = {
+        type: 'error',
+        text: 'У каждой потребности должен быть выбран блок работ.',
+      }
+
       return false
     }
 
     if (!row.starts_at || !row.ends_at) {
-      feedback.value = { type: 'error', text: 'Укажи время начала и окончания для всех потребностей.' }
+      feedback.value = {
+        type: 'error',
+        text: 'Укажи время начала и окончания для всех потребностей.',
+      }
+
+      return false
+    }
+
+    if (row.ends_at <= row.starts_at) {
+      feedback.value = {
+        type: 'error',
+        text: 'Время окончания потребности должно быть позже времени начала.',
+      }
+
       return false
     }
 
     if (!Number(row.required_people) || Number(row.required_people) < 1) {
-      feedback.value = { type: 'error', text: 'Количество людей в потребности должно быть не меньше 1.' }
+      feedback.value = {
+        type: 'error',
+        text: 'Количество людей в потребности должно быть не меньше 1.',
+      }
+
       return false
     }
   }
@@ -265,13 +311,89 @@ function validateForm() {
 }
 
 function buildNeedsPayload() {
-  return needRows.value.map((row) => ({
-    work_block: Number(row.work_block),
-    date: row.date,
-    starts_at: normalizeApiTime(row.starts_at),
-    ends_at: normalizeApiTime(row.ends_at),
-    required_people: Number(row.required_people),
-  }))
+  const dates = buildDateRange(form.value.period_start, form.value.period_end)
+
+  return dates.flatMap((date) =>
+    needRows.value.map((row) => ({
+      work_block: Number(row.work_block),
+      date,
+      starts_at: normalizeApiTime(row.starts_at),
+      ends_at: normalizeApiTime(row.ends_at),
+      required_people: Number(row.required_people),
+    })),
+  )
+}
+
+function toggleNewWorkBlock(row) {
+  row.new_block_open = !row.new_block_open
+
+  if (!row.new_block_open) {
+    row.new_block_code = ''
+    row.new_block_name = ''
+  }
+}
+
+async function createWorkBlockForRow(row) {
+  if (!form.value.squad) {
+    feedback.value = {
+      type: 'error',
+      text: 'Сначала выбери отряд.',
+    }
+
+    return
+  }
+
+  if (!row.new_block_code.trim()) {
+    feedback.value = {
+      type: 'error',
+      text: 'Укажи код блока работ.',
+    }
+
+    return
+  }
+
+  if (!row.new_block_name.trim()) {
+    feedback.value = {
+      type: 'error',
+      text: 'Укажи название блока работ.',
+    }
+
+    return
+  }
+
+  row.is_creating_block = true
+
+  try {
+    const response = await apiClient.post('/api/v1/rosters/work-blocks/', {
+      squad: Number(form.value.squad),
+      code: row.new_block_code.trim(),
+      name: row.new_block_name.trim(),
+      is_active: true,
+    })
+
+    await fetchWorkBlocks(form.value.squad)
+
+    row.work_block = response.data.id
+    row.new_block_open = false
+    row.new_block_code = ''
+    row.new_block_name = ''
+
+    feedback.value = {
+      type: 'success',
+      text: 'Блок работ создан и выбран в потребности.',
+    }
+  } catch (error) {
+    feedback.value = {
+      type: 'error',
+      text:
+        error.response?.data?.detail ||
+        error.response?.data?.code?.[0] ||
+        error.response?.data?.name?.[0] ||
+        'Не удалось создать блок работ.',
+    }
+  } finally {
+    row.is_creating_block = false
+  }
 }
 
 function resetForm() {
@@ -291,9 +413,8 @@ async function submit() {
 
   const payload = {
     squad: Number(form.value.squad),
+    availability_form: Number(form.value.availability_form),
     title: form.value.title.trim(),
-    period_start: form.value.period_start,
-    period_end: form.value.period_end,
     needs: buildNeedsPayload(),
   }
 
@@ -318,27 +439,72 @@ async function submit() {
   isSubmitting.value = false
 }
 
-async function generateSchedule(id) {
-  const result = await scheduleStore.generateSchedule(id)
-  feedback.value = {
-    type: result.success ? 'success' : 'error',
-    text: result.message,
+async function generateSchedule(scheduleId) {
+  const confirmed = window.confirm('Сгенерировать черновик графика?')
+
+  if (!confirmed) {
+    return
   }
+
+  const result = await scheduleStore.generateSchedule(scheduleId)
+
+  if (!result.success) {
+    feedback.value = {
+      type: 'error',
+      text: result.message || 'Не удалось сгенерировать график.',
+    }
+    return
+  }
+
+  feedback.value = {
+    type: 'success',
+    text: result.message || 'Черновик графика успешно сформирован.',
+  }
+
   await scheduleStore.fetchSchedules()
 }
 
-async function publishSchedule(id) {
-  const result = await scheduleStore.publishSchedule(id)
-  feedback.value = {
-    type: result.success ? 'success' : 'error',
-    text: result.message,
+async function publishSchedule(scheduleId) {
+  const confirmed = window.confirm('Опубликовать график? После публикации он станет доступен участникам.')
+
+  if (!confirmed) {
+    return
   }
-  await scheduleStore.fetchSchedules()
+
+  try {
+    const result = await scheduleStore.publishSchedule(scheduleId)
+
+    feedback.value = {
+      type: 'success',
+      text: result?.message || 'График опубликован.',
+    }
+
+    await scheduleStore.fetchSchedules()
+  } catch (error) {
+    feedback.value = {
+      type: 'error',
+      text:
+        error?.response?.data?.detail ||
+        'Не удалось опубликовать график.',
+    }
+  }
+}
+
+function downloadSchedule() {
+  // Пока без реализации.
+}
+
+function editSchedule(item) {
+  router.push({
+    name: 'dashboard-schedule-edit',
+    params: { id: item.id },
+  })
 }
 
 onMounted(async () => {
   await Promise.all([
     fetchSquads(),
+    fetchAvailabilityForms(),
     scheduleStore.fetchSchedules(),
   ])
 })
@@ -346,249 +512,40 @@ onMounted(async () => {
 
 <template>
   <div class="page-stack">
-    <AppCard>
-      <template #header>
-        <div class="card-header">
-          <div>
-            <div class="card-title">Новый график</div>
-            <div class="card-subtitle">
-              Создание графика в обычной форме: период, потребности, блоки работ и количество человек.
-            </div>
-          </div>
-        </div>
-      </template>
+    <ScheduleCreateCard
+      :form="form"
+      :squad-options="squadOptions"
+      :availability-form-options="availabilityFormOptions"
+      :selected-availability-form="selectedAvailabilityForm"
+      :need-rows="needRows"
+      :total-required-people="totalRequiredPeople"
+      :total-required-people-for-period="totalRequiredPeopleForPeriod"
+      :feedback="feedback"
+    />
 
-      <div class="section-grid">
-        <div class="field field--select">
-          <label class="field-label">Отряд</label>
-          <AppSelect
-            v-model="form.squad"
-            :options="squadOptions"
-            placeholder="Выберите отряд"
-          />
-        </div>
+    <ScheduleNeedsEditor
+      :form="form"
+      :selected-availability-form="selectedAvailabilityForm"
+      :need-rows="needRows"
+      :work-block-options="workBlockOptions"
+      :is-submitting="isSubmitting"
+      :is-loading="scheduleStore.isLoading"
+      @add-need="addNeedRow"
+      @remove-need="removeNeedRow"
+      @toggle-new-work-block="toggleNewWorkBlock"
+      @create-work-block="createWorkBlockForRow"
+      @submit="submit"
+    />
 
-        <div class="field">
-          <label class="field-label">Название графика</label>
-          <input
-            v-model="form.title"
-            class="text-input"
-            type="text"
-            placeholder="Например: График работы на 1 неделю августа"
-          />
-        </div>
-
-        <div class="field">
-          <label class="field-label">Дата начала</label>
-          <input
-            v-model="form.period_start"
-            class="text-input"
-            type="date"
-          />
-        </div>
-
-        <div class="field">
-          <label class="field-label">Дата окончания</label>
-          <input
-            v-model="form.period_end"
-            class="text-input"
-            type="date"
-          />
-        </div>
-      </div>
-
-      <div class="summary-row">
-        <div class="summary-chip">
-          <span class="summary-label">Потребностей</span>
-          <strong>{{ needRows.length }}</strong>
-        </div>
-        <div class="summary-chip">
-          <span class="summary-label">Всего мест</span>
-          <strong>{{ totalRequiredPeople }}</strong>
-        </div>
-      </div>
-
-      <div
-        v-if="feedback.text"
-        :class="['feedback', `feedback--${feedback.type || 'info'}`]"
-      >
-        {{ feedback.text }}
-      </div>
-    </AppCard>
-
-    <AppCard>
-      <template #header>
-        <div class="card-header card-header--actions">
-          <div>
-            <div class="card-title">Потребности графика</div>
-            <div class="card-subtitle">
-              Здесь задаётся, сколько людей нужно в конкретный день и на какой блок работ.
-            </div>
-          </div>
-
-          <button class="btn btn--primary" @click="addNeedRow">
-            Добавить потребность
-          </button>
-        </div>
-      </template>
-
-      <div v-if="!form.period_start || !form.period_end" class="empty-state">
-        Сначала выбери период графика, затем добавляй строки потребностей.
-      </div>
-
-      <div v-else-if="!needRows.length" class="empty-state">
-        Пока нет ни одной потребности. Нажми «Добавить потребность».
-      </div>
-
-      <div v-else class="needs-list">
-        <div
-          v-for="(row, index) in needRows"
-          :key="row.local_id"
-          class="need-card"
-        >
-          <div class="need-card__top">
-            <div class="need-card__title">
-              Потребность #{{ index + 1 }}
-            </div>
-
-            <button
-              class="btn btn--ghost"
-              @click="removeNeedRow(row.local_id)"
-            >
-              Удалить
-            </button>
-          </div>
-
-          <div class="need-grid">
-            <div class="field field--select">
-              <label class="field-label">Дата</label>
-              <AppSelect
-                v-model="row.date"
-                :options="dateOptions"
-                placeholder="Выберите дату"
-              />
-            </div>
-
-            <div class="field field--select">
-              <label class="field-label">Блок работ</label>
-              <AppSelect
-                v-model="row.work_block"
-                :options="workBlockOptions"
-                placeholder="Выберите блок работ"
-              />
-            </div>
-
-            <div class="field">
-              <label class="field-label">Начало</label>
-              <input
-                v-model="row.starts_at"
-                class="text-input"
-                type="time"
-              />
-            </div>
-
-            <div class="field">
-              <label class="field-label">Окончание</label>
-              <input
-                v-model="row.ends_at"
-                class="text-input"
-                type="time"
-              />
-            </div>
-
-            <div class="field">
-              <label class="field-label">Сколько человек нужно</label>
-              <input
-                v-model="row.required_people"
-                class="text-input"
-                type="number"
-                min="1"
-                step="1"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="actions-row">
-        <button
-          class="btn btn--primary"
-          :disabled="isSubmitting || scheduleStore.isLoading"
-          @click="submit"
-        >
-          {{ isSubmitting ? 'Сохранение...' : 'Создать график' }}
-        </button>
-      </div>
-    </AppCard>
-
-    <AppCard>
-      <template #header>
-        <div class="card-header">
-          <div>
-            <div class="card-title">Список графиков</div>
-            <div class="card-subtitle">Черновики можно сгенерировать, затем опубликовать.</div>
-          </div>
-        </div>
-      </template>
-
-      <div v-if="scheduleStore.isLoading" class="empty-state">
-        Загрузка...
-      </div>
-
-      <div v-else-if="!scheduleStore.schedules.length" class="empty-state">
-        Графики ещё не созданы.
-      </div>
-
-      <div v-else class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Отряд</th>
-              <th>Название</th>
-              <th>Период</th>
-              <th>Потребностей</th>
-              <th>Статус</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr v-for="item in scheduleStore.schedules" :key="item.id">
-              <td>{{ item.id }}</td>
-              <td>{{ formatSquadName(item.squad) }}</td>
-              <td>{{ item.title }}</td>
-              <td>{{ formatPeriod(item.period_start, item.period_end) }}</td>
-              <td>{{ item.needs?.length || 0 }}</td>
-              <td>
-                <span :class="getStatusClass(item.status)">
-                  {{ getStatusLabel(item.status) }}
-                </span>
-              </td>
-              <td>
-                <div class="row-actions">
-                  <button
-                    class="btn btn--ghost"
-                    :disabled="item.status !== 'draft'"
-                    @click="generateSchedule(item.id)"
-                  >
-                    Сгенерировать
-                  </button>
-
-                  <button
-                    class="btn btn--ghost"
-                    :disabled="item.status !== 'draft'"
-                    @click="publishSchedule(item.id)"
-                  >
-                    Опубликовать
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </AppCard>
+    <SchedulesTable
+      :schedules="scheduleStore.schedules"
+      :squads="squads"
+      :is-loading="scheduleStore.isLoading"
+      @generate="generateSchedule"
+      @publish="publishSchedule"
+      @download="downloadSchedule"
+      @edit="editSchedule"
+    />
   </div>
 </template>
 
@@ -597,281 +554,5 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.card-header--actions {
-  align-items: center;
-}
-
-.card-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-color);
-}
-
-.card-subtitle {
-  margin-top: 4px;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-
-.section-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.field-label {
-  color: var(--text-color);
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.text-input {
-  width: 100%;
-  min-height: 46px;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  border: var(--card-border);
-  background: var(--header-footer-bg);
-  color: var(--text-color);
-  outline: none;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.text-input:focus {
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.16);
-}
-
-.field--select :deep(.custom-select) {
-  max-width: none;
-}
-
-.field--select :deep(.select-trigger) {
-  min-height: 46px;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  background: var(--header-footer-bg);
-  border: var(--card-border);
-}
-
-.summary-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.summary-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-color);
-}
-
-.summary-label {
-  color: var(--text-muted);
-}
-
-.feedback {
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  line-height: 1.45;
-}
-
-.feedback--success {
-  background: rgba(76, 175, 80, 0.12);
-  color: #9fe0a2;
-}
-
-.feedback--error {
-  background: rgba(244, 67, 54, 0.12);
-  color: #ffb4ad;
-}
-
-.feedback--info {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-color);
-}
-
-.empty-state {
-  padding: 22px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.needs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.need-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 18px;
-}
-
-.need-card__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.need-card__title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-color);
-}
-
-.need-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.actions-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.btn {
-  border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  transform: none;
-}
-
-.btn--primary {
-  background: var(--accent-gradient);
-  color: #fff;
-  box-shadow: var(--card-shadow);
-}
-
-.btn--primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.btn--ghost {
-  background: transparent;
-  color: var(--text-color);
-  border: var(--card-border);
-}
-
-.btn--ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  color: var(--text-color);
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  text-align: left;
-  vertical-align: middle;
-}
-
-.data-table th {
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.status-pill--draft {
-  background: rgba(255, 193, 7, 0.12);
-  color: #ffd76a;
-}
-
-.status-pill--published {
-  background: rgba(76, 175, 80, 0.12);
-  color: #9fe0a2;
-}
-
-@media (max-width: 980px) {
-  .section-grid,
-  .need-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .card-header,
-  .card-header--actions,
-  .need-card__top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .actions-row {
-    justify-content: stretch;
-  }
-
-  .actions-row .btn,
-  .card-header--actions .btn {
-    width: 100%;
-  }
-}
-
-@media (max-width: 640px) {
-  .summary-row {
-    flex-direction: column;
-  }
-
-  .summary-chip {
-    justify-content: space-between;
-  }
 }
 </style>

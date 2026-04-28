@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 
-import AppCard from '@/components/AppCard.vue'
-import UserQrCard from '@/components/UserQrCard.vue'
+import AppCard from '@/components/ui/AppCard.vue'
+import UserQrCard from '@/components/users/UserQrCard.vue'
 
 import useAuthStore from '@/stores/auth'
 import { useScheduleStore } from '@/stores/schedule'

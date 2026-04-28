@@ -3,9 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import apiClient from '@/axios'
-import SquadEditForm from '@/components/SquadEditForm.vue'
-import MembersManage from '@/components/MembersManage.vue'
-import FeesManage from '@/components/FeesManage.vue'
+import SquadEditForm from '@/components/squads/SquadEditForm.vue'
+import MembersManage from '@/components/squads/MembersManage.vue'
+import FeesManage from '@/components/squads/FeesManage.vue'
 import { useUserStore } from '@/stores/user'
 import { PERMISSIONS } from '@/constants/permissions'
 

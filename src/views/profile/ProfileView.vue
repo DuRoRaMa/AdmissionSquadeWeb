@@ -5,13 +5,13 @@ import { useUserStore } from '@/stores/user'
 import { useScheduleStore } from '@/stores/schedule'
 
 import AppProfileCard from '@/components/AppProfileCard.vue'
-import UserAccountCard from '@/components/UserAccountCard.vue'
-import UserContractCard from '@/components/UserContractCard.vue'
-import UserMembershipCard from '@/components/UserMembershipCard.vue'
-import UserPersonalCard from '@/components/UserPersonalCard.vue'
-import UserStudyInfoCard from '@/components/UserStudyInfoCard.vue'
-import UserPassportCard from '@/components/UserPassportCard.vue'
-import UserQrCard from '@/components/UserQrCard.vue'
+import UserAccountCard from '@/components/users/UserAccountCard.vue'
+import UserContractCard from '@/components/users/UserContractCard.vue'
+import UserMembershipCard from '@/components/users/UserMembershipCard.vue'
+import UserPersonalCard from '@/components/users/UserPersonalCard.vue'
+import UserStudyInfoCard from '@/components/users/UserStudyInfoCard.vue'
+import UserPassportCard from '@/components/users/UserPassportCard.vue'
+import UserQrCard from '@/components/users/UserQrCard.vue'
 
 const authStore = useAuthStore()
 const userStore = useUserStore()

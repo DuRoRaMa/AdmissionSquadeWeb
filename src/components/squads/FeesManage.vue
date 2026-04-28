@@ -62,7 +62,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import apiClient from '@/axios'
-import ModalAddFee from '@/components/ModalAddFee.vue'
+import ModalAddFee from '@/components/squads/ModalAddFee.vue'
 import { useConfirmModal } from '@/composables/useConfirmModal'
 import useAccess from '@/composables/useAccess'
 import { PERMISSIONS } from '@/constants/permissions'

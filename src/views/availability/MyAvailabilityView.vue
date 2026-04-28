@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue'
-import AppCard from '@/components/AppCard.vue'
+import AppCard from '@/components/ui/AppCard.vue'
 import { useAvailabilityStore } from '@/stores/availability'
 
 const availabilityStore = useAvailabilityStore()
