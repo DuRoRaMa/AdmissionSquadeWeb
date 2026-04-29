@@ -1,194 +1,205 @@
+<template>
+  <section class="needs-editor schedule-controls">
+    <div class="needs-header">
+      <div>
+        <h3>Потребности</h3>
+        <p>
+          Потребность задаётся на весь период работы выбранной формы. При создании графика она будет применена к каждому дню формы.
+        </p>
+      </div>
+
+      <AppButton
+        type="button"
+        variant="primary"
+        :disabled="disabled || !availabilityForm"
+        @click="addNeed"
+      >
+        Добавить блок
+      </AppButton>
+    </div>
+
+    <div v-if="!availabilityForm" class="empty-state">
+      Сначала выберите закрытую форму доступности.
+    </div>
+
+    <div v-else-if="!modelValue.length" class="empty-state">
+      Потребности не добавлены.
+    </div>
+
+    <div v-else class="needs-table">
+      <div class="needs-table__head">
+        <span>Блок работ</span>
+        <span>Основная смена</span>
+        <span>Дополнительная смена</span>
+        <span>Количество людей</span>
+        <span></span>
+      </div>
+
+      <ScheduleNeedRow
+        v-for="row in modelValue"
+        :key="row.localId"
+        :row="row"
+        :work-block-options="workBlockOptions"
+        :has-primary-shift="hasPrimaryShift"
+        :has-extra-shift="hasExtraShift"
+        :disabled="disabled"
+        @update="updateNeed(row.localId, $event)"
+        @remove="removeNeed(row.localId)"
+      />
+    </div>
+  </section>
+</template>
+
 <script setup>
-import AppCard from '@/components/ui/AppCard.vue'
+import { computed } from 'vue'
+
+import AppButton from '@/components/ui/AppButton.vue'
 import ScheduleNeedRow from '@/components/schedules/ScheduleNeedRow.vue'
 
 const props = defineProps({
-  form: {
-    type: Object,
-    required: true,
+  modelValue: {
+    type: Array,
+    default: () => [],
   },
-  selectedAvailabilityForm: {
+  availabilityForm: {
     type: Object,
     default: null,
   },
-  needRows: {
+  workBlocks: {
     type: Array,
     default: () => [],
   },
-  workBlockOptions: {
-    type: Array,
-    default: () => [],
-  },
-  isSubmitting: {
-    type: Boolean,
-    default: false,
-  },
-  isLoading: {
+  disabled: {
     type: Boolean,
     default: false,
   },
 })
 
-const emit = defineEmits([
-  'add-need',
-  'remove-need',
-  'toggle-new-work-block',
-  'create-work-block',
-  'submit',
-])
+const emit = defineEmits(['update:modelValue'])
+
+const days = computed(() => [...(props.availabilityForm?.days || [])])
+
+const hasPrimaryShift = computed(() => hasShiftKind('primary'))
+const hasExtraShift = computed(() => hasShiftKind('extra'))
+
+const workBlockOptions = computed(() => props.workBlocks.map((block) => ({
+  value: String(block.id),
+  label: block.code ? `${block.code} · ${block.name}` : block.name,
+})))
+
+function hasShiftKind(kind) {
+  return days.value.some((day) => (
+    day.shifts || []
+  ).some((shift) => shift.shift_kind === kind && shift.is_active !== false))
+}
+
+function createLocalId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function createNeedRow() {
+  return {
+    localId: createLocalId(),
+    workBlock: '',
+    primary: hasPrimaryShift.value,
+    extra: false,
+    requiredPeople: 1,
+  }
+}
+
+function addNeed() {
+  emit('update:modelValue', [...props.modelValue, createNeedRow()])
+}
+
+function updateNeed(localId, nextRow) {
+  emit(
+    'update:modelValue',
+    props.modelValue.map((item) => (item.localId === localId ? nextRow : item)),
+  )
+}
+
+function removeNeed(localId) {
+  emit('update:modelValue', props.modelValue.filter((item) => item.localId !== localId))
+}
 </script>
 
-<template>
-  <AppCard>
-    <template #header>
-      <div class="card-header card-header--actions">
-        <div>
-          <div class="card-title">Потребности графика</div>
-          <div class="card-subtitle">
-            Каждая строка потребности применяется ко всем дням выбранного периода.
-            Например, если указать 20 человек, то каждый день периода будет создана
-            потребность на 20 человек для выбранного блока работ.
-          </div>
-        </div>
-
-        <button
-          class="btn btn--primary"
-          :disabled="!props.form.availability_form"
-          type="button"
-          @click="emit('add-need')"
-        >
-          Добавить потребность
-        </button>
-      </div>
-    </template>
-
-    <div
-      v-if="!props.form.availability_form"
-      class="empty-state"
-    >
-      Сначала выберите закрытую форму доступности, затем добавляйте потребности.
-    </div>
-
-    <div
-      v-else-if="!needRows.length"
-      class="empty-state"
-    >
-      Пока нет ни одной потребности. Нажмите «Добавить потребность».
-    </div>
-
-    <div
-      v-else
-      class="needs-list"
-    >
-      <ScheduleNeedRow
-        v-for="(row, index) in needRows"
-        :key="row.local_id"
-        :row="row"
-        :index="index"
-        :selected-availability-form="selectedAvailabilityForm"
-        :work-block-options="workBlockOptions"
-        @remove="emit('remove-need', $event)"
-        @toggle-new-work-block="emit('toggle-new-work-block', $event)"
-        @create-work-block="emit('create-work-block', $event)"
-      />
-    </div>
-
-    <div class="actions-row">
-      <button
-        class="btn btn--primary"
-        :disabled="isSubmitting || isLoading"
-        type="button"
-        @click="emit('submit')"
-      >
-        {{ isSubmitting ? 'Сохранение...' : 'Создать график' }}
-      </button>
-    </div>
-  </AppCard>
-</template>
-
 <style scoped>
-.card-header {
+.needs-editor {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.needs-header {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 1rem;
+  align-items: flex-start;
 }
 
-.card-header--actions {
-  align-items: center;
-}
-
-.card-title {
-  font-size: 1rem;
-  font-weight: 700;
+.needs-header h3 {
+  margin: 0;
   color: var(--text-color);
 }
 
-.card-subtitle {
-  margin-top: 4px;
+.needs-header p {
+  margin: 0.3rem 0 0;
   color: var(--text-muted);
-  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.needs-table {
+  display: grid;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.needs-table__head {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 160px 190px 150px 40px;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0 0 0.45rem;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .empty-state {
-  padding: 22px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
-  text-align: center;
+  border: 1px dashed var(--card-border);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
 }
 
-.needs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.schedule-controls :deep(.btn),
+.schedule-controls :deep(input),
+.schedule-controls :deep(select),
+.schedule-controls :deep(.app-select__trigger),
+.schedule-controls :deep(.select-trigger) {
+  min-height: 36px;
+  height: 36px;
+  font-size: 0.85rem;
 }
 
-.actions-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
+.schedule-controls :deep(.btn) {
+  padding: 0.4rem 0.8rem;
+  box-shadow: none;
 }
 
-.btn {
-  border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+.schedule-controls :deep(.app-select),
+.schedule-controls :deep(.select-wrapper) {
+  width: 100%;
+  max-width: none;
 }
 
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  transform: none;
-}
-
-.btn--primary {
-  background: var(--accent-gradient);
-  color: #fff;
-  box-shadow: var(--card-shadow);
-}
-
-.btn--primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-@media (max-width: 980px) {
-  .card-header,
-  .card-header--actions {
+@media (max-width: 900px) {
+  .needs-header {
     flex-direction: column;
-    align-items: flex-start;
   }
 
-  .actions-row {
-    justify-content: stretch;
-  }
-
-  .actions-row .btn,
-  .card-header--actions .btn {
-    width: 100%;
+  .needs-table__head {
+    display: none;
   }
 }
 </style>

@@ -1,5 +1,10 @@
 <script setup>
+import { computed } from 'vue'
+
+import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
+import AppIconButton from '@/components/ui/AppIconButton.vue'
+import AppStatusBadge from '@/components/ui/AppStatusBadge.vue'
 
 const props = defineProps({
   schedules: {
@@ -14,44 +19,116 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  generatingId: {
+    type: [String, Number],
+    default: null,
+  },
+  publishingId: {
+    type: [String, Number],
+    default: null,
+  },
+  deletingId: {
+    type: [String, Number],
+    default: null,
+  },
+  downloadingId: {
+    type: [String, Number],
+    default: null,
+  },
 })
 
 const emit = defineEmits([
+  'refresh',
   'generate',
   'publish',
   'download',
   'edit',
+  'delete',
 ])
 
+const isTableLoading = computed(() => props.isLoading || props.loading)
+
+const isAnyActionLoading = computed(() => Boolean(
+  props.generatingId || props.publishingId || props.deletingId || props.downloadingId,
+))
+
+const statusLabels = {
+  draft: 'Черновик',
+  published: 'Опубликован',
+  archived: 'Архив',
+}
+
+const statusVariants = {
+  draft: 'primary',
+  published: 'success',
+  archived: 'danger',
+}
+
 function formatShortDate(date) {
+  if (!date) {
+    return '—'
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '—'
+  }
+
   return new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
+  }).format(parsedDate)
 }
 
 function formatPeriod(start, end) {
-  if (!start || !end) return '—'
+  if (!start || !end) {
+    return '—'
+  }
+
   return `${formatShortDate(start)} — ${formatShortDate(end)}`
 }
 
 function getStatusLabel(status) {
-  const map = {
-    draft: 'Черновик',
-    published: 'Опубликован',
-    archived: 'Архив',
-  }
-  return map[status] || status || '—'
+  return statusLabels[status] || status || '—'
 }
 
-function getStatusClass(status) {
-  return {
-    'status-pill': true,
-    'status-pill--draft': status === 'draft',
-    'status-pill--published': status === 'published',
-    'status-pill--archived': status === 'archived',
+function getStatusVariant(status) {
+  return statusVariants[status] || 'primary'
+}
+
+function getEntityId(value) {
+  if (value && typeof value === 'object') {
+    return value.id
   }
+
+  return value
+}
+
+function getEntityName(value) {
+  if (value && typeof value === 'object') {
+    return value.name || value.title || ''
+  }
+
+  return ''
+}
+
+function formatSquadName(squad) {
+  const squadName = getEntityName(squad)
+
+  if (squadName) {
+    return squadName
+  }
+
+  const squadId = getEntityId(squad)
+  const foundSquad = props.squads.find((item) => String(item.id) === String(squadId))
+
+  return foundSquad?.name || '—'
 }
 
 function isScheduleGenerated(item) {
@@ -66,124 +143,138 @@ function canGenerateSchedule(item) {
   return item.status === 'draft' && !isScheduleGenerated(item)
 }
 
-function canManageGeneratedSchedule(item) {
+function canPublishSchedule(item) {
   return item.status === 'draft' && isScheduleGenerated(item)
 }
 
-function formatSquadName(squadId) {
-  const squad = props.squads.find((item) => Number(item.id) === Number(squadId))
-  return squad?.name || `Отряд #${squadId}`
+function canEditSchedule(item) {
+  return isScheduleGenerated(item)
+}
+
+function canDownloadSchedule(item) {
+  return isScheduleGenerated(item) || item.status === 'published'
 }
 </script>
 
 <template>
-  <AppCard>
+  <AppCard class="schedules-table-card schedule-controls">
     <template #header>
       <div class="card-header">
         <div>
-          <div class="card-title">Список графиков</div>
-          <div class="card-subtitle">
-            Черновики можно сгенерировать, затем опубликовать.
-          </div>
+          <h2 class="card-title">Список графиков</h2>
+          <p class="card-subtitle">
+            Черновики можно сгенерировать, затем отредактировать и опубликовать.
+          </p>
         </div>
+
+        <AppButton
+          type="button"
+          variant="primary"
+          :disabled="isTableLoading"
+          @click="emit('refresh')"
+        >
+          Обновить
+        </AppButton>
       </div>
     </template>
 
-    <div
-      v-if="isLoading"
-      class="empty-state"
-    >
-      Загрузка...
+    <div v-if="isTableLoading" class="empty-state">
+      Загрузка графиков...
     </div>
 
-    <div
-      v-else-if="!schedules.length"
-      class="empty-state"
-    >
+    <div v-else-if="!schedules.length" class="empty-state">
       Графики ещё не созданы.
     </div>
 
-    <div
-      v-else
-      class="table-wrap"
-    >
+    <div v-else class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Отряд</th>
             <th>Название</th>
+            <th>Отряд</th>
             <th>Период</th>
-            <th>Потребностей</th>
             <th>Статус</th>
-            <th>Действия</th>
-            <th class="download-column" aria-label="Скачать"></th>
+            <th class="actions-column">Действия</th>
           </tr>
         </thead>
 
         <tbody>
-          <tr
-            v-for="item in schedules"
-            :key="item.id"
-          >
-            <td>{{ item.id }}</td>
+          <tr v-for="item in schedules" :key="item.id">
+            <td>
+              <strong>{{ item.title || '—' }}</strong>
+            </td>
 
             <td>{{ formatSquadName(item.squad) }}</td>
 
-            <td>{{ item.title }}</td>
-
             <td>{{ formatPeriod(item.period_start, item.period_end) }}</td>
 
-            <td>{{ item.needs?.length || 0 }}</td>
-
             <td>
-              <span :class="getStatusClass(item.status)">
-                {{ getStatusLabel(item.status) }}
-              </span>
+              <AppStatusBadge
+                :text="getStatusLabel(item.status)"
+                :variant="getStatusVariant(item.status)"
+              />
             </td>
 
-            <td>
-              <div class="row-actions row-actions--schedules">
-                <button
-                  v-if="canGenerateSchedule(item)"
-                  class="btn btn--primary btn--table-action"
+            <td class="actions-cell">
+              <div class="row-actions">
+                <AppButton
+                  v-if="canPublishSchedule(item)"
                   type="button"
-                  @click="emit('generate', item.id)"
+                  variant="primary"
+                  class="main-action-button"
+                  :loading="String(publishingId) === String(item.id)"
+                  :disabled="isAnyActionLoading"
+                  @click="emit('publish', item)"
+                >
+                  Опубликовать
+                </AppButton>
+
+                <AppButton
+                  v-else-if="canGenerateSchedule(item)"
+                  type="button"
+                  variant="primary"
+                  class="main-action-button"
+                  :loading="String(generatingId) === String(item.id)"
+                  :disabled="isAnyActionLoading"
+                  @click="emit('generate', item)"
                 >
                   Сгенерировать
-                </button>
+                </AppButton>
 
-                <template v-if="canManageGeneratedSchedule(item)">
-                  <button
-                    class="btn btn--ghost btn--table-action btn--edit"
-                    type="button"
-                    @click="emit('edit', item)"
-                  >
-                    Редактировать
-                  </button>
+                <AppIconButton
+                  v-if="canEditSchedule(item)"
+                  icon="edit"
+                  variant="primary"
+                  class="edit-action"
+                  title="Редактировать график"
+                  aria-label="Редактировать график"
+                  :disabled="isAnyActionLoading"
+                  @click="emit('edit', item)"
+                />
 
-                  <button
-                    class="btn btn--success btn--table-action"
-                    type="button"
-                    @click="emit('publish', item.id)"
-                  >
-                    Опубликовать
-                  </button>
-                </template>
+                <AppIconButton
+                  v-if="canDownloadSchedule(item)"
+                  icon="download"
+                  variant="primary"
+                  class="download-action"
+                  title="Скачать график"
+                  aria-label="Скачать график"
+                  :loading="String(downloadingId) === String(item.id)"
+                  :disabled="isAnyActionLoading"
+                  @click="emit('download', item)"
+                />
+
+                <AppIconButton
+                  icon="trash"
+                  variant="danger"
+                  class="delete-action"
+                  title="Удалить график"
+                  aria-label="Удалить график"
+                  :loading="String(deletingId) === String(item.id)"
+                  :disabled="isAnyActionLoading"
+                  @click="emit('delete', item)"
+                />
               </div>
-            </td>
-
-            <td class="download-cell">
-              <button
-                v-if="isScheduleGenerated(item) || item.status === 'published'"
-                class="btn btn--icon-download"
-                type="button"
-                title="Скачать график"
-                aria-label="Скачать график"
-                @click="emit('download', item)"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-              </button>
             </td>
           </tr>
         </tbody>
@@ -201,109 +292,22 @@ function formatSquadName(squadId) {
 }
 
 .card-title {
+  margin: 0;
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-color);
 }
 
 .card-subtitle {
-  margin-top: 4px;
+  margin: 4px 0 0;
   color: var(--text-muted);
   line-height: 1.45;
 }
 
 .empty-state {
   padding: 22px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
   text-align: center;
-}
-
-.btn {
-  border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  transform: none;
-}
-
-.btn--primary {
-  background: var(--accent-gradient);
-  color: #fff;
-  box-shadow: var(--card-shadow);
-}
-
-.btn--primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.btn--success {
-  background: var(--btn-success-gradient);
-  color: #fff;
-  box-shadow: var(--card-shadow);
-}
-
-.btn--success:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.btn--table-action {
-  padding: 9px 14px;
-  border-radius: var(--btn-border-radius);
-  white-space: nowrap;
-}
-
-.btn--ghost {
-  background: transparent;
-  color: var(--text-color);
-  border: var(--card-border);
-}
-
-.btn--ghost:hover:not(:disabled) {
-  background: var(--input-bg);
-}
-
-.btn--edit {
-  border: var(--input-border);
-  color: var(--text-color);
-}
-
-.download-column,
-.download-cell {
-  width: 52px;
-  text-align: right;
-}
-
-.btn--icon-download {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: var(--input-border);
-  border-radius: 12px;
-  background: var(--input-bg);
-  color: var(--text-color);
-  box-shadow: none;
-}
-
-.btn--icon-download:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--card-bg);
-}
-
-.btn--icon-download svg {
-  width: 19px;
-  height: 19px;
 }
 
 .table-wrap {
@@ -312,6 +316,7 @@ function formatSquadName(squadId) {
 
 .data-table {
   width: 100%;
+  min-width: 860px;
   border-collapse: collapse;
   color: var(--text-color);
 }
@@ -319,7 +324,7 @@ function formatSquadName(squadId) {
 .data-table th,
 .data-table td {
   padding: 14px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--card-border);
   text-align: left;
   vertical-align: middle;
 }
@@ -327,38 +332,71 @@ function formatSquadName(squadId) {
 .data-table th {
   color: var(--text-muted);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.actions-column {
+  width: 292px;
+  min-width: 292px;
+  text-align: right;
+}
+
+.actions-cell {
+  width: 292px;
+  min-width: 292px;
+  text-align: right;
 }
 
 .row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.status-pill {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 128px 36px 36px 36px;
   align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
+  justify-content: end;
+  column-gap: 0.35rem;
+  width: 292px;
+  min-width: 292px;
+  margin-left: auto;
+}
+
+.main-action-button {
+  grid-column: 1;
+  width: 128px;
+  min-width: 128px;
+}
+
+.edit-action {
+  grid-column: 2;
+}
+
+.download-action {
+  grid-column: 3;
+}
+
+.delete-action {
+  grid-column: 4;
+}
+
+.schedule-controls :deep(.btn),
+.schedule-controls :deep(.app-icon-button) {
+  min-height: 36px;
+  height: 36px;
   font-size: 0.85rem;
-  font-weight: 700;
 }
 
-.status-pill--draft {
-  background: var(--btn-warning-gradient);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.18);
+.schedule-controls :deep(.btn) {
+  padding: 0.4rem 0.75rem;
+  box-shadow: none;
 }
 
-.status-pill--published {
-  background: var(--btn-success-gradient);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(72, 187, 120, 0.16);
+.schedule-controls :deep(.app-icon-button) {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
-.status-pill--archived {
-  background: var(--btn-secondary-gradient);
-  color: #fff;
+@media (max-width: 768px) {
+  .card-header {
+    flex-direction: column;
+  }
 }
 </style>

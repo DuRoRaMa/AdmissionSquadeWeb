@@ -1,292 +1,416 @@
-<script setup>
-import AppCard from '@/components/ui/AppCard.vue'
-import AppSelect from '@/components/ui/AppSelect.vue'
-
-const props = defineProps({
-  form: {
-    type: Object,
-    required: true,
-  },
-  squadOptions: {
-    type: Array,
-    default: () => [],
-  },
-  availabilityFormOptions: {
-    type: Array,
-    default: () => [],
-  },
-  selectedAvailabilityForm: {
-    type: Object,
-    default: null,
-  },
-  needRows: {
-    type: Array,
-    default: () => [],
-  },
-  totalRequiredPeople: {
-    type: Number,
-    default: 0,
-  },
-  totalRequiredPeopleForPeriod: {
-    type: Number,
-    default: 0,
-  },
-  feedback: {
-    type: Object,
-    default: () => ({ type: '', text: '' }),
-  },
-})
-
-function formatShortDate(date) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
-}
-
-function formatPeriod(start, end) {
-  if (!start || !end) return '—'
-  return `${formatShortDate(start)} — ${formatShortDate(end)}`
-}
-</script>
-
 <template>
-  <AppCard>
+  <AppCard class="schedule-create-card">
     <template #header>
-      <div class="card-header">
+      <div class="card-heading">
         <div>
-          <div class="card-title">Новый график</div>
-          <div class="card-subtitle">
-            Создание графика на основе закрытой формы доступности: период берётся из формы,
-            затем задаются потребности на каждый день периода.
-          </div>
+          <h2>Новый график</h2>
+          <p>
+            Выберите отряд и закрытую форму доступности. Период и время смен будут взяты из выбранной формы.
+          </p>
         </div>
       </div>
     </template>
 
-    <div class="section-grid">
-      <div class="field field--select">
-        <label class="field-label">Отряд</label>
+    <form class="schedule-form schedule-controls" @submit.prevent="handleSubmit">
+      <div class="form-grid">
+        <div class="field-block">
+          <label class="field-label">Отряд</label>
+          <AppSelect
+            v-model="form.squad"
+            :options="squadOptions"
+            placeholder="Выберите отряд"
+            :disabled="loading || saving"
+            required
+            @update:model-value="handleSquadChange"
+          />
+          <p class="field-hint">
+            {{ selectedSquadName || 'Сначала выберите отряд для графика' }}
+          </p>
+        </div>
 
-        <AppSelect
-          v-model="props.form.squad"
-          :options="squadOptions"
-          placeholder="Выберите отряд"
-        />
+        <div class="field-block">
+          <label class="field-label">Форма доступности</label>
+          <AppSelect
+            v-model="form.availabilityForm"
+            :options="availabilityFormOptions"
+            placeholder="Выберите форму"
+            :disabled="!form.squad || loading || saving"
+            required
+            @update:model-value="handleAvailabilityFormChange"
+          />
+          <p class="field-hint">
+            {{ selectedAvailabilityFormText || 'Будут показаны только закрытые формы выбранного отряда' }}
+          </p>
+        </div>
+
+        <div class="field-block">
+          <AppInput
+            v-model="form.title"
+            label="Название графика"
+            placeholder="Например: График на апрель"
+            :disabled="loading || saving"
+            required
+          />
+          <p class="field-hint">
+            Название будет отображаться в списке графиков.
+          </p>
+        </div>
       </div>
 
-      <div class="field field--select">
-        <label class="field-label">Форма доступности</label>
+      <div v-if="selectedAvailabilityForm" class="selected-form-info">
+        <span>Период работы: {{ formatDate(selectedAvailabilityForm.period_start) }} — {{ formatDate(selectedAvailabilityForm.period_end) }}</span>
+        <span>Дней в форме: {{ selectedAvailabilityForm.days?.length || 0 }}</span>
+      </div>
 
-        <AppSelect
-          v-model="props.form.availability_form"
-          :options="availabilityFormOptions"
-          :disabled="!props.form.squad"
-          placeholder="Выберите закрытую форму"
-        />
+      <ScheduleNeedsEditor
+        v-model="needs"
+        :availability-form="selectedAvailabilityForm"
+        :work-blocks="filteredWorkBlocks"
+        :disabled="!selectedAvailabilityForm || loading || saving"
+      />
 
-        <div
-          v-if="props.form.squad && !availabilityFormOptions.length"
-          class="field-hint"
+      <div class="form-actions">
+        <AppButton
+          type="submit"
+          variant="primary"
+          :loading="saving"
+          :disabled="loading || saving"
         >
-          Для выбранного отряда нет закрытых форм доступности.
-        </div>
+          Создать график
+        </AppButton>
       </div>
-
-      <div class="field">
-        <label class="field-label">Название графика</label>
-
-        <input
-          v-model="props.form.title"
-          class="text-input"
-          type="text"
-          placeholder="Например: График на период работы приёмной комиссии"
-        />
-      </div>
-
-      <div class="field">
-        <label class="field-label">Период графика</label>
-
-        <div class="readonly-field">
-          {{
-            selectedAvailabilityForm
-              ? formatPeriod(
-                  selectedAvailabilityForm.period_start,
-                  selectedAvailabilityForm.period_end
-                )
-              : 'Выберите форму доступности'
-          }}
-        </div>
-      </div>
-    </div>
-
-    <div class="summary-row">
-      <div class="summary-chip">
-        <span class="summary-label">Блоков потребности</span>
-        <strong>{{ needRows.length }}</strong>
-      </div>
-
-      <div class="summary-chip">
-        <span class="summary-label">Нужно людей в день</span>
-        <strong>{{ totalRequiredPeople }}</strong>
-      </div>
-
-      <div class="summary-chip">
-        <span class="summary-label">Всего назначений за период</span>
-        <strong>{{ totalRequiredPeopleForPeriod }}</strong>
-      </div>
-    </div>
-
-    <div
-      v-if="feedback.text"
-      :class="['feedback', `feedback--${feedback.type || 'info'}`]"
-    >
-      {{ feedback.text }}
-    </div>
+    </form>
   </AppCard>
 </template>
 
-<style scoped>
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+<script setup>
+import { computed, reactive, ref } from 'vue'
+
+import AppButton from '@/components/ui/AppButton.vue'
+import AppCard from '@/components/ui/AppCard.vue'
+import AppInput from '@/components/ui/AppInput.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
+import ScheduleNeedsEditor from '@/components/schedules/ScheduleNeedsEditor.vue'
+
+const props = defineProps({
+  squads: {
+    type: Array,
+    default: () => [],
+  },
+  availabilityForms: {
+    type: Array,
+    default: () => [],
+  },
+  workBlocks: {
+    type: Array,
+    default: () => [],
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  saving: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits(['create', 'squad-change', 'validation-error'])
+
+const form = reactive({
+  squad: '',
+  availabilityForm: '',
+  title: '',
+})
+
+const needs = ref([])
+
+const squadOptions = computed(() => props.squads.map((squad) => ({
+  value: String(squad.id),
+  label: squad.name,
+})))
+
+const selectedSquad = computed(() => props.squads.find(
+  (squad) => String(squad.id) === String(form.squad),
+) || null)
+
+const selectedSquadName = computed(() => selectedSquad.value?.name || '')
+
+const filteredAvailabilityForms = computed(() => {
+  if (!form.squad) {
+    return []
+  }
+
+  return props.availabilityForms
+    .filter((item) => String(getEntityId(item.squad)) === String(form.squad))
+    .filter((item) => item.status === 'closed')
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+})
+
+const availabilityFormOptions = computed(() => filteredAvailabilityForms.value.map((item) => ({
+  value: String(item.id),
+  label: `${item.title} · ${formatDate(item.period_start)} — ${formatDate(item.period_end)}`,
+})))
+
+const selectedAvailabilityForm = computed(() => props.availabilityForms.find(
+  (item) => String(item.id) === String(form.availabilityForm),
+) || null)
+
+const selectedAvailabilityFormText = computed(() => {
+  if (!selectedAvailabilityForm.value) {
+    return ''
+  }
+
+  return `${selectedAvailabilityForm.value.title} · ${formatDate(selectedAvailabilityForm.value.period_start)} — ${formatDate(selectedAvailabilityForm.value.period_end)}`
+})
+
+const filteredWorkBlocks = computed(() => {
+  if (!form.squad) {
+    return []
+  }
+
+  return props.workBlocks
+    .filter((block) => block.is_active !== false)
+    .filter((block) => String(getEntityId(block.squad)) === String(form.squad))
+})
+
+function getEntityId(value) {
+  if (value && typeof value === 'object') {
+    return value.id
+  }
+
+  return value
 }
 
-.card-title {
-  font-size: 1rem;
-  font-weight: 700;
+function formatDate(value) {
+  if (!value) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat('ru-RU').format(new Date(value))
+}
+
+function normalizeTime(value) {
+  if (!value) {
+    return ''
+  }
+
+  return String(value).slice(0, 5)
+}
+
+function getFormDays(availabilityForm) {
+  return [...(availabilityForm?.days || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+}
+
+function getShiftByKind(day, kind) {
+  return (day?.shifts || []).find((shift) => shift.shift_kind === kind && shift.is_active !== false)
+}
+
+function createNeedRow() {
+  return {
+    localId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    workBlock: '',
+    primary: true,
+    extra: false,
+    requiredPeople: 1,
+  }
+}
+
+function rebuildNeedsFromForm() {
+  needs.value = [createNeedRow()]
+}
+
+function handleSquadChange(value) {
+  form.squad = value
+  form.availabilityForm = ''
+  needs.value = []
+  emit('squad-change', value)
+}
+
+function handleAvailabilityFormChange(value) {
+  form.availabilityForm = value
+  rebuildNeedsFromForm()
+
+  if (!form.title && selectedAvailabilityForm.value?.title) {
+    form.title = `График: ${selectedAvailabilityForm.value.title}`
+  }
+}
+
+function buildNeedsPayload() {
+  const availabilityForm = selectedAvailabilityForm.value
+
+  if (!availabilityForm) {
+    throw new Error('Выберите форму доступности')
+  }
+
+  const days = getFormDays(availabilityForm)
+  const payload = []
+
+  needs.value.forEach((row) => {
+    if (!row.workBlock) {
+      throw new Error('В каждой строке потребности нужно выбрать блок работ')
+    }
+
+    if (!row.primary && !row.extra) {
+      throw new Error('В каждой строке потребности нужно выбрать хотя бы одну смену')
+    }
+
+    const requiredPeople = Number(row.requiredPeople)
+
+    if (!Number.isFinite(requiredPeople) || requiredPeople < 1) {
+      throw new Error('Количество людей в потребности должно быть больше нуля')
+    }
+
+    const selectedKinds = []
+
+    if (row.primary) {
+      selectedKinds.push('primary')
+    }
+
+    if (row.extra) {
+      selectedKinds.push('extra')
+    }
+
+    days.forEach((day) => {
+      selectedKinds.forEach((kind) => {
+        const shift = getShiftByKind(day, kind)
+
+        if (!shift) {
+          return
+        }
+
+        payload.push({
+          date: day.date,
+          work_block: Number(row.workBlock),
+          starts_at: normalizeTime(shift.starts_at),
+          ends_at: normalizeTime(shift.ends_at),
+          required_people: requiredPeople,
+        })
+      })
+    })
+  })
+
+  return payload
+}
+
+function handleSubmit() {
+  try {
+    const title = form.title.trim()
+
+    if (!form.squad) {
+      throw new Error('Выберите отряд')
+    }
+
+    if (!form.availabilityForm) {
+      throw new Error('Выберите форму доступности')
+    }
+
+    if (!title) {
+      throw new Error('Введите название графика')
+    }
+
+    const payload = {
+      squad: Number(form.squad),
+      availability_form: Number(form.availabilityForm),
+      title,
+      needs: buildNeedsPayload(),
+    }
+
+    if (!payload.needs.length) {
+      throw new Error('Добавьте хотя бы одну потребность')
+    }
+
+    emit('create', payload)
+  } catch (error) {
+    emit('validation-error', error.message || 'Проверьте заполнение графика')
+  }
+}
+</script>
+
+<style scoped>
+.schedule-create-card {
+  --schedule-control-height: 36px;
+}
+
+.card-heading h2 {
+  margin: 0;
   color: var(--text-color);
 }
 
-.card-subtitle {
-  margin-top: 4px;
+.card-heading p {
+  margin: 0.35rem 0 0;
   color: var(--text-muted);
-  line-height: 1.45;
 }
 
-.section-grid {
+.schedule-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 1rem;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.field-block {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
 }
 
 .field-label {
   color: var(--text-color);
+  font-size: 0.85rem;
   font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.text-input {
-  width: 100%;
-  min-height: 46px;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  border: var(--card-border);
-  background: var(--header-footer-bg);
-  color: var(--text-color);
-  outline: none;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.text-input:focus {
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.16);
-}
-
-.readonly-field {
-  width: 100%;
-  min-height: 46px;
-  padding: 0.8rem 0.95rem;
-  border: var(--input-border);
-  border-radius: 14px;
-  background: var(--input-bg);
-  color: var(--text-color);
-  display: flex;
-  align-items: center;
-}
-
-.field--select :deep(.custom-select) {
-  max-width: none;
-}
-
-.field--select :deep(.select-trigger) {
-  min-height: 46px;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  background: var(--header-footer-bg);
-  border: var(--card-border);
 }
 
 .field-hint {
+  min-height: 1.2rem;
+  margin: 0;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   line-height: 1.35;
 }
 
-.summary-row {
+.selected-form-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.summary-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-color);
-}
-
-.summary-label {
+  gap: 0.75rem;
   color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
-.feedback {
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  line-height: 1.45;
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.feedback--success {
-  background: rgba(76, 175, 80, 0.12);
-  color: #9fe0a2;
+.schedule-controls :deep(.btn),
+.schedule-controls :deep(input),
+.schedule-controls :deep(select),
+.schedule-controls :deep(.app-select__trigger),
+.schedule-controls :deep(.select-trigger) {
+  min-height: var(--schedule-control-height);
+  height: var(--schedule-control-height);
+  font-size: 0.85rem;
 }
 
-.feedback--error {
-  background: rgba(244, 67, 54, 0.12);
-  color: #ffb4ad;
+.schedule-controls :deep(.btn) {
+  padding: 0.4rem 0.8rem;
+  box-shadow: none;
 }
 
-.feedback--info {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-color);
+.schedule-controls :deep(.app-select),
+.schedule-controls :deep(.select-wrapper) {
+  width: 100%;
+  max-width: none;
 }
 
-@media (max-width: 980px) {
-  .section-grid {
+@media (max-width: 992px) {
+  .form-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .summary-row {
-    flex-direction: column;
-  }
-
-  .summary-chip {
-    justify-content: space-between;
   }
 }
 </style>

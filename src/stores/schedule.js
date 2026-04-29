@@ -1,40 +1,86 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+
 import apiClient from '@/axios'
 
-export const useScheduleStore = defineStore('schedule', () => {
-  const myEntries = ref([])
-  const myRequests = ref([])
-  const adminRequests = ref([])
-  const schedules = ref([])
-  const isLoading = ref(false)
+function normalizeListResponse(data) {
+  if (Array.isArray(data)) {
+    return data
+  }
 
-  async function fetchMySchedule() {
-    isLoading.value = true
-    try {
-      const response = await apiClient.get('/api/v1/rosters/my-schedule/')
-      myEntries.value = response.data
-      return { success: true, data: response.data }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || 'Не удалось загрузить мой график'
-      }
-    } finally {
-      isLoading.value = false
+  if (Array.isArray(data?.results)) {
+    return data.results
+  }
+
+  return []
+}
+
+function getErrorMessage(error, fallback) {
+  const data = error?.response?.data
+
+  if (typeof data?.detail === 'string') {
+    return data.detail
+  }
+
+  if (typeof data?.message === 'string') {
+    return data.message
+  }
+
+  if (data && typeof data === 'object') {
+    const firstValue = Object.values(data)[0]
+
+    if (Array.isArray(firstValue) && firstValue.length) {
+      return firstValue.join(' ')
+    }
+
+    if (typeof firstValue === 'string') {
+      return firstValue
     }
   }
 
+  return fallback
+}
+
+function getScheduleEditDataUrl(scheduleId) {
+  return `/api/v1/rosters/schedules/${scheduleId}/edit-data/`
+}
+
+function getScheduleAssignmentsUrl(scheduleId) {
+  return `/api/v1/rosters/schedules/${scheduleId}/assignments/`
+}
+
+function getScheduleNeedsUrl(scheduleId) {
+  return `/api/v1/rosters/schedules/${scheduleId}/needs/`
+}
+
+export const useScheduleStore = defineStore('schedule', () => {
+  const schedules = ref([])
+  const entries = ref([])
+  const editData = ref(null)
+  const isLoading = ref(false)
+  const isGenerating = ref(false)
+  const isPublishing = ref(false)
+  const isDeleting = ref(false)
+  const isSavingAssignments = ref(false)
+  const isSavingNeeds = ref(false)
+
   async function fetchSchedules() {
     isLoading.value = true
+
     try {
       const response = await apiClient.get('/api/v1/rosters/schedules/')
-      schedules.value = response.data
-      return { success: true, data: response.data }
+      schedules.value = normalizeListResponse(response.data)
+
+      return {
+        success: true,
+        data: schedules.value,
+      }
     } catch (error) {
+      schedules.value = []
+
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось загрузить графики'
+        message: getErrorMessage(error, 'Не удалось загрузить графики'),
       }
     } finally {
       isLoading.value = false
@@ -43,13 +89,20 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   async function createSchedule(payload) {
     isLoading.value = true
+
     try {
       const response = await apiClient.post('/api/v1/rosters/schedules/', payload)
-      return { success: true, data: response.data, message: 'График создан' }
+      await fetchSchedules()
+
+      return {
+        success: true,
+        data: response.data,
+        message: 'Черновик графика создан',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось создать график'
+        message: getErrorMessage(error, 'Не удалось создать график'),
       }
     } finally {
       isLoading.value = false
@@ -57,153 +110,211 @@ export const useScheduleStore = defineStore('schedule', () => {
   }
 
   async function generateSchedule(scheduleId) {
+    isGenerating.value = true
+
     try {
       const response = await apiClient.post(`/api/v1/rosters/schedules/${scheduleId}/generate/`)
-      return { success: true, message: response.data.message }
+      await fetchSchedules()
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'График сформирован',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось сгенерировать график'
+        message: getErrorMessage(error, 'Не удалось сгенерировать график'),
       }
+    } finally {
+      isGenerating.value = false
     }
   }
 
   async function publishSchedule(scheduleId) {
+    isPublishing.value = true
+
     try {
       const response = await apiClient.post(`/api/v1/rosters/schedules/${scheduleId}/publish/`)
-      return { success: true, message: response.data.message }
+      await fetchSchedules()
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'График опубликован',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось опубликовать график'
+        message: getErrorMessage(error, 'Не удалось опубликовать график'),
       }
+    } finally {
+      isPublishing.value = false
     }
   }
 
-  async function fetchMyRequests() {
-    isLoading.value = true
+  async function deleteSchedule(scheduleId) {
+    isDeleting.value = true
+
     try {
-      const response = await apiClient.get('/api/v1/rosters/my-change-requests/')
-      myRequests.value = response.data
-      return { success: true, data: response.data }
+      await apiClient.delete(`/api/v1/rosters/schedules/${scheduleId}/`)
+      await fetchSchedules()
+
+      return {
+        success: true,
+        message: 'График удалён',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось загрузить мои заявки'
+        message: getErrorMessage(error, 'Не удалось удалить график'),
+      }
+    } finally {
+      isDeleting.value = false
+    }
+  }
+
+  async function fetchScheduleEntries(scheduleId) {
+    isLoading.value = true
+
+    try {
+      const response = await apiClient.get(`/api/v1/rosters/schedules/${scheduleId}/entries/`)
+      entries.value = normalizeListResponse(response.data)
+
+      return {
+        success: true,
+        data: entries.value,
+      }
+    } catch (error) {
+      entries.value = []
+
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось загрузить смены графика'),
       }
     } finally {
       isLoading.value = false
     }
   }
 
-  async function fetchAdminRequests() {
+  async function fetchScheduleEditData(scheduleId, date = '') {
     isLoading.value = true
-    try {
-      const response = await apiClient.get('/api/v1/rosters/change-requests/')
-      adminRequests.value = response.data
-      return { success: true, data: response.data }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || 'Не удалось загрузить заявки'
-      }
-    } finally {
-      isLoading.value = false
-    }
-  }
 
-  async function createChangeRequest(payload) {
     try {
-      const response = await apiClient.post('/api/v1/rosters/change-requests/create/', payload)
-      return { success: true, data: response.data }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || 'Не удалось создать заявку'
-      }
-    }
-  }
-
-  async function approveChangeRequest(id) {
-    try {
-      const response = await apiClient.post(`/api/v1/rosters/change-requests/${id}/approve/`)
-      return { success: true, message: response.data.message }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || 'Не удалось одобрить заявку'
-      }
-    }
-  }
-
-  async function rejectChangeRequest(id, reviewComment = '') {
-    try {
-      const response = await apiClient.post(`/api/v1/rosters/change-requests/${id}/reject/`, {
-        review_comment: reviewComment
+      const response = await apiClient.get(getScheduleEditDataUrl(scheduleId), {
+        params: date ? { date } : {},
       })
-      return { success: true, message: response.data.message }
+
+      editData.value = response.data
+
+      return {
+        success: true,
+        data: response.data,
+      }
     } catch (error) {
+      editData.value = null
+
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось отклонить заявку'
+        message: getErrorMessage(error, 'Не удалось загрузить данные редактирования графика'),
       }
+    } finally {
+      isLoading.value = false
     }
   }
 
-  async function createQr(entryId) {
+  async function saveScheduleDayNeeds(scheduleId, payload) {
+    isSavingNeeds.value = true
+
     try {
-      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/qr/`)
-      return { success: true, data: response.data }
+      const response = await apiClient.post(getScheduleNeedsUrl(scheduleId), payload)
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'Потребности сохранены',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось получить QR-код'
+        message: getErrorMessage(error, 'Не удалось сохранить потребности'),
       }
+    } finally {
+      isSavingNeeds.value = false
     }
   }
 
-  async function scanQr(token) {
+  async function saveScheduleDayAssignments(scheduleId, payload) {
+    isSavingAssignments.value = true
+
     try {
-      const response = await apiClient.post('/api/v1/rosters/scan-qr/', { token })
-      return { success: true, data: response.data, message: response.data.message }
+      const response = await apiClient.post(getScheduleAssignmentsUrl(scheduleId), payload)
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'Назначения сохранены',
+      }
     } catch (error) {
       return {
         success: false,
-        message: error.response?.data?.detail || 'Не удалось обработать QR'
+        message: getErrorMessage(error, 'Не удалось сохранить назначения'),
       }
+    } finally {
+      isSavingAssignments.value = false
     }
   }
 
-  const nearestEntry = computed(() => {
-    if (!myEntries.value.length) return null
+  async function getScheduleById(scheduleId) {
+    const localSchedule = schedules.value.find((item) => String(item.id) === String(scheduleId))
 
-    const sorted = [...myEntries.value].sort((a, b) => {
-      const aDate = new Date(`${a.date}T${a.starts_at}`)
-      const bDate = new Date(`${b.date}T${b.starts_at}`)
-      return aDate - bDate
-    })
+    if (localSchedule) {
+      return {
+        success: true,
+        data: localSchedule,
+      }
+    }
 
-    return sorted[0] || null
-  })
+    const result = await fetchSchedules()
+
+    if (!result.success) {
+      return result
+    }
+
+    const schedule = schedules.value.find((item) => String(item.id) === String(scheduleId))
+
+    if (!schedule) {
+      return {
+        success: false,
+        message: 'График не найден',
+      }
+    }
+
+    return {
+      success: true,
+      data: schedule,
+    }
+  }
 
   return {
-    myEntries,
-    myRequests,
-    adminRequests,
     schedules,
+    entries,
+    editData,
     isLoading,
-    nearestEntry,
-    fetchMySchedule,
+    isGenerating,
+    isPublishing,
+    isDeleting,
+    isSavingAssignments,
+    isSavingNeeds,
     fetchSchedules,
     createSchedule,
     generateSchedule,
     publishSchedule,
-    fetchMyRequests,
-    fetchAdminRequests,
-    createChangeRequest,
-    approveChangeRequest,
-    rejectChangeRequest,
-    createQr,
-    scanQr
+    deleteSchedule,
+    fetchScheduleEntries,
+    fetchScheduleEditData,
+    saveScheduleDayNeeds,
+    saveScheduleDayAssignments,
+    getScheduleById,
   }
 })

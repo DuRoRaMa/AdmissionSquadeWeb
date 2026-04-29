@@ -1,116 +1,222 @@
 <script setup>
-defineProps({
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import AppIcon from './AppIcon.vue'
+
+const props = defineProps({
+  message: {
+    type: String,
+    default: '',
+  },
   variant: {
     type: String,
     default: 'info',
-    validator: (value) => ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'].includes(value)
+    validator: (value) => ['success', 'danger', 'warning', 'info', 'primary'].includes(value),
   },
-  dismissible: Boolean
+  type: {
+    type: String,
+    default: '',
+  },
+  dismissible: {
+    type: Boolean,
+    default: true,
+  },
+  autoClose: {
+    type: Boolean,
+    default: true,
+  },
+  duration: {
+    type: Number,
+    default: 10000,
+  },
 })
 
-defineEmits(['close'])
+const emit = defineEmits(['close'])
+
+const isShown = ref(true)
+let closeTimer = null
+
+const normalizedVariant = computed(() => props.type || props.variant)
+
+const iconName = computed(() => {
+  const icons = {
+    success: 'check',
+    danger: 'close',
+    warning: 'warning',
+    info: 'info',
+    primary: 'info',
+  }
+
+  return icons[normalizedVariant.value] || 'info'
+})
+
+watch(
+  () => [props.message, normalizedVariant.value, props.duration, props.autoClose],
+  () => {
+    isShown.value = true
+    startTimer()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  clearTimer()
+})
+
+function startTimer() {
+  clearTimer()
+
+  if (!props.autoClose || props.duration <= 0) return
+
+  closeTimer = window.setTimeout(() => {
+    close()
+  }, props.duration)
+}
+
+function clearTimer() {
+  if (!closeTimer) return
+
+  window.clearTimeout(closeTimer)
+  closeTimer = null
+}
+
+function close() {
+  clearTimer()
+  isShown.value = false
+  emit('close')
+}
 </script>
 
 <template>
-  <div :class="['alert', `alert-${variant}`, { 'alert-dismissible': dismissible }]" role="alert">
-    <slot />
-    <button v-if="dismissible" type="button" class="btn-close" @click="$emit('close')" aria-label="Close"></button>
-  </div>
+  <Teleport to="body">
+    <Transition name="app-alert-toast">
+      <aside
+        v-if="isShown"
+        :class="['app-alert', `app-alert--${normalizedVariant}`]"
+        :role="normalizedVariant === 'danger' ? 'alert' : 'status'"
+      >
+        <span class="app-alert__icon" aria-hidden="true">
+          <AppIcon :name="iconName" size="18" />
+        </span>
+
+        <div class="app-alert__content">
+          <slot>{{ message }}</slot>
+        </div>
+
+        <button
+          v-if="dismissible"
+          type="button"
+          class="app-alert__close"
+          aria-label="Закрыть уведомление"
+          @click="close"
+        >
+          <AppIcon name="close" size="16" />
+        </button>
+      </aside>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.alert {
-  position: relative;
-  padding: var(--alert-padding);
-  margin-bottom: 1rem;
-  border-radius: var(--alert-border-radius);
-  font-size: var(--alert-font-size);
-  border: var(--alert-border);
-  box-shadow: var(--alert-shadow);
-  backdrop-filter: blur(var(--alert-blur));
-  -webkit-backdrop-filter: blur(var(--alert-blur));
-  transition: var(--alert-transition);
-  overflow: hidden;
+.app-alert {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 11000;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  width: min(420px, calc(100vw - 32px));
+  padding: 1rem;
+  border: var(--card-border);
+  border-left: 4px solid var(--accent-color, #0d6efd);
+  border-radius: var(--card-border-radius);
+  background: var(--card-bg-solid);
+  color: var(--text-color);
+  box-shadow: var(--card-shadow);
 }
-.alert:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+
+.app-alert--success {
+  border-left-color: var(--success-color, #198754);
 }
-.alert-primary {
-  background: var(--alert-primary-gradient);
-  color: var(--alert-text-dark);
+
+.app-alert--danger {
+  border-left-color: var(--danger-color, #dc3545);
 }
-/* ... остальные варианты ... */
-.alert-dismissible {
-  padding-right: 3rem;
+
+.app-alert--warning {
+  border-left-color: var(--warning-color, #ffc107);
 }
-.btn-close {
-  top: 20%;
-  right: 1rem;
-  transform: translateY(-50%);
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  background: rgba(0, 0, 0, 0.2);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--alert-transition);
-  display: flex;
+
+.app-alert--info,
+.app-alert--primary {
+  border-left-color: var(--accent-color, #0d6efd);
+}
+
+.app-alert__icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: inherit;
-  font-size: var(--alert-close-size);
-  line-height: 1;
-  opacity: 0.7;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--accent-color, #0d6efd);
 }
-.btn-close::before,
-.btn-close::after {
-  content: '';
-  position: absolute;
-  width: 1rem;
-  height: 2px;
-  background: currentColor;
-  border-radius: 1px;
+
+.app-alert--success .app-alert__icon {
+  color: var(--success-color, #198754);
 }
-.btn-close::before {
-  transform: rotate(45deg);
+
+.app-alert--danger .app-alert__icon {
+  color: var(--danger-color, #dc3545);
 }
-.btn-close::after {
-  transform: rotate(-45deg);
+
+.app-alert--warning .app-alert__icon {
+  color: var(--warning-color, #b7791f);
 }
-.btn-close:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.3);
-  transform: translateY(-50%) scale(1.1);
+
+.app-alert__content {
+  min-width: 0;
+  padding-top: 0.1rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
-.alert-light .btn-close {
-  background: rgba(0, 0, 0, 0.1);
+
+.app-alert__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
 }
-.alert-light .btn-close:hover {
-  background: rgba(0, 0, 0, 0.2);
+
+.app-alert__close:hover {
+  color: var(--text-color);
+  opacity: 0.8;
 }
-.alert-enter-active,
-.alert-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+
+.app-alert-toast-enter-active,
+.app-alert-toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.alert-enter-from,
-.alert-leave-to {
+
+.app-alert-toast-enter-from,
+.app-alert-toast-leave-to {
   opacity: 0;
-  transform: translateY(-20px) scale(0.95);
+  transform: translateY(-8px);
 }
+
 @media (max-width: 576px) {
-  .alert-dismissible {
-    padding-right: 2.5rem;
-  }
-  .btn-close {
-    right: 0.75rem;
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-  .btn-close::before,
-  .btn-close::after {
-    width: 0.75rem;
+  .app-alert {
+    top: 16px;
+    right: 16px;
   }
 }
 </style>

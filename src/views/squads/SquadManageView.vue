@@ -6,6 +6,7 @@ import apiClient from '@/axios'
 import SquadEditForm from '@/components/squads/SquadEditForm.vue'
 import MembersManage from '@/components/squads/MembersManage.vue'
 import FeesManage from '@/components/squads/FeesManage.vue'
+import WorkBlocksManage from '@/components/squads/WorkBlocksManage.vue'
 import { useUserStore } from '@/stores/user'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -39,6 +40,10 @@ const canManageFees = computed(() => {
   )
 })
 
+const canManageWorkBlocks = computed(() => {
+  return canManagePage.value
+})
+
 const availableTabs = computed(() => {
   const tabs = []
 
@@ -52,6 +57,10 @@ const availableTabs = computed(() => {
 
   if (canManageFees.value) {
     tabs.push({ key: 'fees', label: 'Взносы' })
+  }
+
+  if (canManageWorkBlocks.value) {
+    tabs.push({ key: 'work-blocks', label: 'Блоки работ' })
   }
 
   return tabs
@@ -178,6 +187,10 @@ onMounted(async () => {
 
         <template v-else-if="activeTab === 'fees'">
           <FeesManage :squad-id="squadIdNumber" />
+        </template>
+
+        <template v-else-if="activeTab === 'work-blocks'">
+          <WorkBlocksManage :squad-id="squadIdNumber" />
         </template>
       </div>
     </template>

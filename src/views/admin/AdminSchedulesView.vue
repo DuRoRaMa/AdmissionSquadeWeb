@@ -1,558 +1,341 @@
-<script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { useScheduleStore } from '@/stores/schedule'
-import apiClient from '@/axios'
-import ScheduleCreateCard from '@/components/schedules/ScheduleCreateCard.vue'
-import ScheduleNeedsEditor from '@/components/schedules/ScheduleNeedsEditor.vue'
-import SchedulesTable from '@/components/schedules/SchedulesTable.vue'
-
-const scheduleStore = useScheduleStore()
-const router = useRouter()
-
-const squads = ref([])
-const workBlocks = ref([])
-const needRows = ref([])
-const availabilityForms = ref([])
-const isSubmitting = ref(false)
-const feedback = ref({
-  type: '',
-  text: '',
-})
-
-const form = ref(createInitialForm())
-
-function createInitialForm() {
-  return {
-    squad: '',
-    availability_form: '',
-    title: '',
-    period_start: '',
-    period_end: '',
-  }
-}
-
-function createNeedRow(source = {}) {
-  return {
-    local_id: source.local_id ?? `${Date.now()}-${Math.random()}`,
-    work_block: source.work_block ?? '',
-    starts_at: normalizeInputTime(source.starts_at ?? '09:00'),
-    ends_at: normalizeInputTime(source.ends_at ?? '15:00'),
-    required_people: source.required_people ?? 1,
-
-    new_block_open: false,
-    new_block_code: '',
-    new_block_name: '',
-    is_creating_block: false,
-  }
-}
-
-function normalizeInputTime(value) {
-  if (!value) return ''
-  return String(value).slice(0, 5)
-}
-
-function normalizeApiTime(value) {
-  if (!value) return ''
-  const stringValue = String(value)
-  return stringValue.length === 5 ? `${stringValue}:00` : stringValue
-}
-
-function buildDateRange(start, end) {
-  if (!start || !end) return []
-
-  const startDate = new Date(`${start}T00:00:00`)
-  const endDate = new Date(`${end}T00:00:00`)
-
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
-    return []
-  }
-
-  const result = []
-  const cursor = new Date(startDate)
-
-  while (cursor <= endDate) {
-    const year = cursor.getFullYear()
-    const month = String(cursor.getMonth() + 1).padStart(2, '0')
-    const day = String(cursor.getDate()).padStart(2, '0')
-    result.push(`${year}-${month}-${day}`)
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  return result
-}
-
-const squadOptions = computed(() =>
-  squads.value.map((item) => ({
-    value: item.id,
-    label: item.name || `Отряд #${item.id}`,
-  })),
-)
-
-const closedAvailabilityForms = computed(() => {
-  return availabilityForms.value.filter((item) => {
-    const sameSquad = Number(item.squad) === Number(form.value.squad)
-    const isClosed = item.status === 'closed'
-
-    return sameSquad && isClosed
-  })
-})
-
-const availabilityFormOptions = computed(() =>
-  closedAvailabilityForms.value.map((item) => ({
-    value: item.id,
-    label: `${item.title} — ${formatPeriod(item.period_start, item.period_end)}`,
-  })),
-)
-
-const selectedAvailabilityForm = computed(() => {
-  return availabilityForms.value.find(
-    (item) => Number(item.id) === Number(form.value.availability_form),
-  )
-})
-
-const workBlockOptions = computed(() =>
-  workBlocks.value.map((item) => ({
-    value: item.id,
-    label: item.code ? `${item.code} — ${item.name}` : item.name,
-  })),
-)
-
-const totalRequiredPeople = computed(() =>
-  needRows.value.reduce((sum, row) => sum + Number(row.required_people || 0), 0),
-)
-
-const totalRequiredPeopleForPeriod = computed(() => {
-  const daysCount = buildDateRange(form.value.period_start, form.value.period_end).length
-  return totalRequiredPeople.value * daysCount
-})
-
-function formatShortDate(date) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
-}
-
-function formatPeriod(start, end) {
-  if (!start || !end) return '—'
-  return `${formatShortDate(start)} — ${formatShortDate(end)}`
-}
-
-async function fetchAvailabilityForms() {
-  try {
-    const response = await apiClient.get('/api/v1/rosters/forms/')
-    availabilityForms.value = Array.isArray(response.data)
-      ? response.data
-      : response.data?.results || []
-  } catch (error) {
-    availabilityForms.value = []
-
-    feedback.value = {
-      type: 'error',
-      text: error.response?.data?.detail || 'Не удалось загрузить формы доступности',
-    }
-  }
-}
-
-async function fetchSquads() {
-  try {
-    const response = await apiClient.get('/api/v1/squads/')
-    const items = Array.isArray(response.data) ? response.data : (response.data?.results || [])
-    squads.value = items
-  } catch (error) {
-    feedback.value = {
-      type: 'error',
-      text: error.response?.data?.detail || 'Не удалось загрузить список отрядов',
-    }
-  }
-}
-
-async function fetchWorkBlocks(squadId) {
-  if (!squadId) {
-    workBlocks.value = []
-    return
-  }
-
-  try {
-    const response = await apiClient.get('/api/v1/rosters/work-blocks/', {
-      params: { squad: squadId },
-    })
-
-    const items = Array.isArray(response.data) ? response.data : (response.data?.results || [])
-    workBlocks.value = items
-  } catch (error) {
-    workBlocks.value = []
-    feedback.value = {
-      type: 'error',
-      text: error.response?.data?.detail || 'Не удалось загрузить блоки работ',
-    }
-  }
-}
-
-watch(
-  () => form.value.squad,
-  async (newSquad, oldSquad) => {
-    if (newSquad !== oldSquad) {
-      form.value.availability_form = ''
-      form.value.period_start = ''
-      form.value.period_end = ''
-
-      needRows.value = needRows.value.map((row) => ({
-        ...row,
-        work_block: '',
-      }))
-    }
-
-    await fetchWorkBlocks(newSquad)
-  },
-)
-
-watch(
-  () => form.value.availability_form,
-  () => {
-    const selectedForm = selectedAvailabilityForm.value
-
-    if (!selectedForm) {
-      form.value.period_start = ''
-      form.value.period_end = ''
-      needRows.value = []
-      return
-    }
-
-    form.value.period_start = selectedForm.period_start
-    form.value.period_end = selectedForm.period_end
-  },
-)
-
-function addNeedRow() {
-  if (!form.value.availability_form || !form.value.period_start || !form.value.period_end) {
-    feedback.value = {
-      type: 'error',
-      text: 'Сначала выбери закрытую форму доступности, затем добавляй потребности.',
-    }
-
-    return
-  }
-
-  needRows.value.push(createNeedRow())
-}
-
-function removeNeedRow(localId) {
-  needRows.value = needRows.value.filter((row) => row.local_id !== localId)
-}
-
-function validateForm() {
-  if (!form.value.squad) {
-    feedback.value = { type: 'error', text: 'Выбери отряд.' }
-    return false
-  }
-  if (!form.value.availability_form) {
-    feedback.value = {
-      type: 'error',
-      text: 'Выбери закрытую форму доступности.',
-    }
-
-    return false
-  }
-  if (!form.value.title.trim()) {
-    feedback.value = { type: 'error', text: 'Укажи название графика.' }
-    return false
-  }
-
-  if (!form.value.period_start || !form.value.period_end) {
-    feedback.value = {
-      type: 'error',
-      text: 'Период графика не определён. Проверь выбранную форму доступности.',
-    }
-    return false
-  }
-
-  for (const row of needRows.value) {
-    if (!row.work_block) {
-      feedback.value = {
-        type: 'error',
-        text: 'У каждой потребности должен быть выбран блок работ.',
-      }
-
-      return false
-    }
-
-    if (!row.starts_at || !row.ends_at) {
-      feedback.value = {
-        type: 'error',
-        text: 'Укажи время начала и окончания для всех потребностей.',
-      }
-
-      return false
-    }
-
-    if (row.ends_at <= row.starts_at) {
-      feedback.value = {
-        type: 'error',
-        text: 'Время окончания потребности должно быть позже времени начала.',
-      }
-
-      return false
-    }
-
-    if (!Number(row.required_people) || Number(row.required_people) < 1) {
-      feedback.value = {
-        type: 'error',
-        text: 'Количество людей в потребности должно быть не меньше 1.',
-      }
-
-      return false
-    }
-  }
-
-  return true
-}
-
-function buildNeedsPayload() {
-  const dates = buildDateRange(form.value.period_start, form.value.period_end)
-
-  return dates.flatMap((date) =>
-    needRows.value.map((row) => ({
-      work_block: Number(row.work_block),
-      date,
-      starts_at: normalizeApiTime(row.starts_at),
-      ends_at: normalizeApiTime(row.ends_at),
-      required_people: Number(row.required_people),
-    })),
-  )
-}
-
-function toggleNewWorkBlock(row) {
-  row.new_block_open = !row.new_block_open
-
-  if (!row.new_block_open) {
-    row.new_block_code = ''
-    row.new_block_name = ''
-  }
-}
-
-async function createWorkBlockForRow(row) {
-  if (!form.value.squad) {
-    feedback.value = {
-      type: 'error',
-      text: 'Сначала выбери отряд.',
-    }
-
-    return
-  }
-
-  if (!row.new_block_code.trim()) {
-    feedback.value = {
-      type: 'error',
-      text: 'Укажи код блока работ.',
-    }
-
-    return
-  }
-
-  if (!row.new_block_name.trim()) {
-    feedback.value = {
-      type: 'error',
-      text: 'Укажи название блока работ.',
-    }
-
-    return
-  }
-
-  row.is_creating_block = true
-
-  try {
-    const response = await apiClient.post('/api/v1/rosters/work-blocks/', {
-      squad: Number(form.value.squad),
-      code: row.new_block_code.trim(),
-      name: row.new_block_name.trim(),
-      is_active: true,
-    })
-
-    await fetchWorkBlocks(form.value.squad)
-
-    row.work_block = response.data.id
-    row.new_block_open = false
-    row.new_block_code = ''
-    row.new_block_name = ''
-
-    feedback.value = {
-      type: 'success',
-      text: 'Блок работ создан и выбран в потребности.',
-    }
-  } catch (error) {
-    feedback.value = {
-      type: 'error',
-      text:
-        error.response?.data?.detail ||
-        error.response?.data?.code?.[0] ||
-        error.response?.data?.name?.[0] ||
-        'Не удалось создать блок работ.',
-    }
-  } finally {
-    row.is_creating_block = false
-  }
-}
-
-function resetForm() {
-  form.value = createInitialForm()
-  needRows.value = []
-  workBlocks.value = []
-}
-
-async function submit() {
-  feedback.value = { type: '', text: '' }
-
-  if (!validateForm()) {
-    return
-  }
-
-  isSubmitting.value = true
-
-  const payload = {
-    squad: Number(form.value.squad),
-    availability_form: Number(form.value.availability_form),
-    title: form.value.title.trim(),
-    needs: buildNeedsPayload(),
-  }
-
-  const result = await scheduleStore.createSchedule(payload)
-
-  if (!result.success) {
-    feedback.value = {
-      type: 'error',
-      text: result.message || 'Не удалось создать график',
-    }
-    isSubmitting.value = false
-    return
-  }
-
-  feedback.value = {
-    type: 'success',
-    text: result.message || 'График создан',
-  }
-
-  resetForm()
-  await scheduleStore.fetchSchedules()
-  isSubmitting.value = false
-}
-
-async function generateSchedule(scheduleId) {
-  const confirmed = window.confirm('Сгенерировать черновик графика?')
-
-  if (!confirmed) {
-    return
-  }
-
-  const result = await scheduleStore.generateSchedule(scheduleId)
-
-  if (!result.success) {
-    feedback.value = {
-      type: 'error',
-      text: result.message || 'Не удалось сгенерировать график.',
-    }
-    return
-  }
-
-  feedback.value = {
-    type: 'success',
-    text: result.message || 'Черновик графика успешно сформирован.',
-  }
-
-  await scheduleStore.fetchSchedules()
-}
-
-async function publishSchedule(scheduleId) {
-  const confirmed = window.confirm('Опубликовать график? После публикации он станет доступен участникам.')
-
-  if (!confirmed) {
-    return
-  }
-
-  try {
-    const result = await scheduleStore.publishSchedule(scheduleId)
-
-    feedback.value = {
-      type: 'success',
-      text: result?.message || 'График опубликован.',
-    }
-
-    await scheduleStore.fetchSchedules()
-  } catch (error) {
-    feedback.value = {
-      type: 'error',
-      text:
-        error?.response?.data?.detail ||
-        'Не удалось опубликовать график.',
-    }
-  }
-}
-
-function downloadSchedule() {
-  // Пока без реализации.
-}
-
-function editSchedule(item) {
-  router.push({
-    name: 'dashboard-schedule-edit',
-    params: { id: item.id },
-  })
-}
-
-onMounted(async () => {
-  await Promise.all([
-    fetchSquads(),
-    fetchAvailabilityForms(),
-    scheduleStore.fetchSchedules(),
-  ])
-})
-</script>
-
 <template>
-  <div class="page-stack">
-    <ScheduleCreateCard
-      :form="form"
-      :squad-options="squadOptions"
-      :availability-form-options="availabilityFormOptions"
-      :selected-availability-form="selectedAvailabilityForm"
-      :need-rows="needRows"
-      :total-required-people="totalRequiredPeople"
-      :total-required-people-for-period="totalRequiredPeopleForPeriod"
-      :feedback="feedback"
-    />
+  <div class="admin-page schedules-page">
+    <AppAlert
+      v-if="alert.message"
+      :key="alert.id"
+      :variant="alert.type"
+      dismissible
+      auto-close
+      :duration="10000"
+      @close="clearAlert"
+    >
+      {{ alert.message }}
+    </AppAlert>
 
-    <ScheduleNeedsEditor
-      :form="form"
-      :selected-availability-form="selectedAvailabilityForm"
-      :need-rows="needRows"
-      :work-block-options="workBlockOptions"
-      :is-submitting="isSubmitting"
-      :is-loading="scheduleStore.isLoading"
-      @add-need="addNeedRow"
-      @remove-need="removeNeedRow"
-      @toggle-new-work-block="toggleNewWorkBlock"
-      @create-work-block="createWorkBlockForRow"
-      @submit="submit"
+    <div class="page-header">
+      <div>
+        <h1>Настройка графиков</h1>
+        <p>
+          Создавайте черновики графиков по закрытым формам доступности, задавайте потребности и запускайте генерацию.
+        </p>
+      </div>
+    </div>
+
+    <ScheduleCreateCard
+      :squads="squads"
+      :availability-forms="availabilityForms"
+      :work-blocks="workBlocks"
+      :loading="isPageLoading"
+      :saving="scheduleStore.isLoading"
+      @squad-change="handleSquadChange"
+      @create="handleCreateSchedule"
+      @validation-error="showAlert('danger', $event)"
     />
 
     <SchedulesTable
       :schedules="scheduleStore.schedules"
       :squads="squads"
-      :is-loading="scheduleStore.isLoading"
-      @generate="generateSchedule"
-      @publish="publishSchedule"
-      @download="downloadSchedule"
-      @edit="editSchedule"
+      :loading="scheduleStore.isLoading"
+      :generating-id="generatingScheduleId"
+      :publishing-id="publishingScheduleId"
+      :deleting-id="deletingScheduleId"
+      @refresh="loadInitialData"
+      @generate="handleGenerateSchedule"
+      @publish="handlePublishSchedule"
+      @edit="handleEditSchedule"
+      @download="handleDownloadSchedule"
+      @delete="handleDeleteSchedule"
     />
+
+    <ConfirmModal ref="confirmModalRef" />
   </div>
 </template>
 
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import apiClient from '@/axios'
+import { useScheduleStore } from '@/stores/schedule'
+import { useSquadsStore } from '@/stores/squads'
+
+import AppAlert from '@/components/ui/AppAlert.vue'
+import ConfirmModal from '@/components/ui/ConfirmModal.vue'
+import ScheduleCreateCard from '@/components/schedules/ScheduleCreateCard.vue'
+import SchedulesTable from '@/components/schedules/SchedulesTable.vue'
+
+const router = useRouter()
+const scheduleStore = useScheduleStore()
+const squadsStore = useSquadsStore()
+
+const confirmModalRef = ref(null)
+const availabilityForms = ref([])
+const workBlocks = ref([])
+const selectedSquadId = ref('')
+const isDictionariesLoading = ref(false)
+const generatingScheduleId = ref(null)
+const publishingScheduleId = ref(null)
+const deletingScheduleId = ref(null)
+const downloadingScheduleId = ref(null)
+
+const alert = ref({
+  id: 0,
+  type: 'success',
+  message: '',
+})
+
+const squads = computed(() => squadsStore.squads || [])
+const isPageLoading = computed(() => isDictionariesLoading.value || squadsStore.isLoading)
+
+function normalizeListResponse(data) {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (Array.isArray(data?.results)) {
+    return data.results
+  }
+
+  return []
+}
+
+function showAlert(type, message) {
+  alert.value = {
+    id: Date.now(),
+    type,
+    message,
+  }
+}
+
+function clearAlert() {
+  alert.value = {
+    id: 0,
+    type: 'success',
+    message: '',
+  }
+}
+
+function getErrorMessage(error, fallback) {
+  const data = error?.response?.data
+
+  if (typeof data?.detail === 'string') {
+    return data.detail
+  }
+
+  if (typeof data?.message === 'string') {
+    return data.message
+  }
+
+  if (data && typeof data === 'object') {
+    const firstValue = Object.values(data)[0]
+
+    if (Array.isArray(firstValue) && firstValue.length) {
+      return firstValue.join(' ')
+    }
+
+    if (typeof firstValue === 'string') {
+      return firstValue
+    }
+  }
+
+  return fallback
+}
+
+function getFileNameFromDisposition(disposition, fallbackName) {
+  if (!disposition) {
+    return fallbackName
+  }
+
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+
+  if (utfMatch?.[1]) {
+    return decodeURIComponent(utfMatch[1])
+  }
+
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i)
+
+  if (plainMatch?.[1]) {
+    return plainMatch[1]
+  }
+
+  return fallbackName
+}
+
+function downloadBlob(blob, fileName) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+
+  window.URL.revokeObjectURL(url)
+}
+
+async function fetchAvailabilityForms() {
+  const response = await apiClient.get('/api/v1/rosters/forms/')
+  availabilityForms.value = normalizeListResponse(response.data)
+}
+
+async function fetchWorkBlocks(squadId = '') {
+  const url = squadId
+    ? `/api/v1/rosters/work-blocks/?squad=${squadId}`
+    : '/api/v1/rosters/work-blocks/'
+
+  const response = await apiClient.get(url)
+  workBlocks.value = normalizeListResponse(response.data)
+}
+
+async function loadInitialData() {
+  isDictionariesLoading.value = true
+
+  try {
+    await Promise.all([
+      squadsStore.fetchSquads(),
+      fetchAvailabilityForms(),
+      fetchWorkBlocks(selectedSquadId.value),
+      scheduleStore.fetchSchedules(),
+    ])
+  } catch (error) {
+    showAlert('danger', getErrorMessage(error, 'Не удалось загрузить данные для графиков'))
+  } finally {
+    isDictionariesLoading.value = false
+  }
+}
+
+async function handleSquadChange(squadId) {
+  selectedSquadId.value = squadId || ''
+
+  try {
+    await fetchWorkBlocks(selectedSquadId.value)
+  } catch (error) {
+    showAlert('danger', getErrorMessage(error, 'Не удалось загрузить блоки работ'))
+  }
+}
+
+async function handleCreateSchedule(payload) {
+  const result = await scheduleStore.createSchedule(payload)
+
+  if (!result.success) {
+    showAlert('danger', result.message)
+    return
+  }
+
+  showAlert('success', result.message)
+}
+
+async function handleGenerateSchedule(schedule) {
+  generatingScheduleId.value = schedule.id
+
+  const result = await scheduleStore.generateSchedule(schedule.id)
+
+  generatingScheduleId.value = null
+
+  if (!result.success) {
+    showAlert('danger', result.message)
+    return
+  }
+
+  const entriesCount = result.data?.entries_count ?? 0
+
+  if (entriesCount > 0) {
+    showAlert('success', `${result.message} Создано смен: ${entriesCount}.`)
+    return
+  }
+
+  showAlert('warning', 'Черновик сформирован, но смены не созданы. Проверь потребности и ответы доступности.')
+}
+
+async function handlePublishSchedule(schedule) {
+  publishingScheduleId.value = schedule.id
+
+  const result = await scheduleStore.publishSchedule(schedule.id)
+
+  publishingScheduleId.value = null
+
+  if (!result.success) {
+    showAlert('danger', result.message)
+    return
+  }
+
+  showAlert('success', result.message)
+}
+
+async function handleDownloadSchedule(schedule) {
+  downloadingScheduleId.value = schedule.id
+
+  try {
+    const response = await apiClient.get(`/api/v1/rosters/schedules/${schedule.id}/export/`, {
+      responseType: 'blob',
+    })
+
+    const fallbackName = `${schedule.title || 'schedule'}.xlsx`
+    const fileName = getFileNameFromDisposition(response.headers['content-disposition'], fallbackName)
+    const contentType = response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    downloadBlob(new Blob([response.data], { type: contentType }), fileName)
+  } catch (error) {
+    showAlert('danger', getErrorMessage(error, 'Не удалось скачать график'))
+  } finally {
+    downloadingScheduleId.value = null
+  }
+}
+
+async function handleDeleteSchedule(schedule) {
+  const confirmed = await confirmModalRef.value.open({
+    title: 'Удалить график?',
+    message: `График «${schedule.title}» будет удалён без возможности восстановления.`,
+  })
+
+  if (!confirmed) return
+
+  deletingScheduleId.value = schedule.id
+
+  const result = await scheduleStore.deleteSchedule(schedule.id)
+
+  deletingScheduleId.value = null
+
+  if (!result.success) {
+    showAlert('danger', result.message)
+    return
+  }
+
+  showAlert('success', result.message)
+}
+
+function handleEditSchedule(schedule) {
+  router.push({
+    name: 'dashboard-schedule-edit',
+    params: { id: schedule.id },
+  })
+}
+
+onMounted(loadInitialData)
+</script>
+
 <style scoped>
-.page-stack {
+.schedules-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.page-header {
   display: flex;
-  flex-direction: column;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.page-header p {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+  max-width: 760px;
 }
 </style>
