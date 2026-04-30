@@ -369,18 +369,66 @@ function getWorkBlockName(item) {
 }
 
 function getMemberName(item) {
-  if (item.member_name) {
-    return item.member_name
+  if (!item) {
+    return 'Участник без имени'
+  }
+
+  if (item.memberName) {
+    return item.memberName
   }
 
   if (item.full_name) {
     return item.full_name
   }
 
-  const user = item.user || {}
-  const parts = [user.last_name, user.first_name, user.middle_name].filter(Boolean)
+  if (item.fullName) {
+    return item.fullName
+  }
 
-  return parts.join(' ') || user.email || item.email || 'Участник без имени'
+  if (item.name) {
+    return item.name
+  }
+
+  const user = item.user_detail || item.user || item.profile || {}
+
+  if (typeof user === 'string') {
+    return user
+  }
+
+  const fullNameParts = [
+    user.last_name,
+    user.first_name,
+    user.middle_name || user.patronymic,
+  ]
+    .filter(Boolean)
+    .map((part) => String(part).trim())
+    .filter(Boolean)
+
+  if (fullNameParts.length) {
+    return fullNameParts.join(' ')
+  }
+
+  if (user.full_name) {
+    return user.full_name
+  }
+
+  if (user.fullName) {
+    return user.fullName
+  }
+
+  if (user.email) {
+    return user.email
+  }
+
+  if (item.email) {
+    return item.email
+  }
+
+  const membershipId = item.membership || item.membership_id || item.id
+
+  return membershipId
+    ? `Участник ${membershipId}`
+    : 'Участник без имени'
 }
 
 function normalizeMember(item) {
@@ -388,7 +436,7 @@ function normalizeMember(item) {
     membership: Number(item.membership || item.membership_id || item.id),
     userId: item.user_id || item.user?.id || item.user || null,
     memberName: getMemberName(item),
-    roleName: item.role_name || item.role?.name || '',
+    roleName: item.role_name || item.role_detail?.name || item.role?.name || '',
   }
 }
 
