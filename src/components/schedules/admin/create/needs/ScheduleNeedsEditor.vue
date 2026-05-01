@@ -54,7 +54,7 @@
 import { computed } from 'vue'
 
 import AppButton from '@/components/ui/AppButton.vue'
-import ScheduleNeedRow from '@/components/schedules/ScheduleNeedRow.vue'
+import ScheduleNeedRow from '@/components/schedules/admin/create/needs/ScheduleNeedRow.vue'
 
 const props = defineProps({
   modelValue: {

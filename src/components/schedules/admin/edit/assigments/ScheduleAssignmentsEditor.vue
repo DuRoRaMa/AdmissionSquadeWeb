@@ -81,7 +81,7 @@ import { computed, ref } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppInput from '@/components/ui/AppInput.vue'
-import ScheduleMemberAssignmentRow from '@/components/schedules/ScheduleMemberAssignmentRow.vue'
+import ScheduleMemberAssignmentRow from '@/components/schedules/admin/edit/assigments/ScheduleMemberAssignmentRow.vue'
 
 const props = defineProps({
   modelValue: {

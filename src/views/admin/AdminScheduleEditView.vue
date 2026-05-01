@@ -103,9 +103,9 @@ import AppAlert from '@/components/ui/AppAlert.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppStatusBadge from '@/components/ui/AppStatusBadge.vue'
 import ConfirmModal from '@/components/ui/ConfirmModal.vue'
-import ScheduleAssignmentsEditor from '@/components/schedules/ScheduleAssignmentsEditor.vue'
-import ScheduleDayNeedsEditor from '@/components/schedules/ScheduleDayNeedsEditor.vue'
-import ScheduleDaySelector from '@/components/schedules/ScheduleDaySelector.vue'
+import ScheduleAssignmentsEditor from '@/components/schedules/admin/edit/assigments/ScheduleAssignmentsEditor.vue'
+import ScheduleDayNeedsEditor from '@/components/schedules/admin/edit/day-needs/ScheduleDayNeedsEditor.vue'
+import ScheduleDaySelector from '@/components/schedules/admin/edit/ScheduleDaySelector.vue'
 
 const route = useRoute()
 const router = useRouter()

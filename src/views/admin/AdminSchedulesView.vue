@@ -61,8 +61,8 @@ import { useSquadsStore } from '@/stores/squads'
 
 import AppAlert from '@/components/ui/AppAlert.vue'
 import ConfirmModal from '@/components/ui/ConfirmModal.vue'
-import ScheduleCreateCard from '@/components/schedules/ScheduleCreateCard.vue'
-import SchedulesTable from '@/components/schedules/SchedulesTable.vue'
+import ScheduleCreateCard from '@/components/schedules/admin/create/ScheduleCreateCard.vue'
+import SchedulesTable from '@/components/schedules/admin/list/SchedulesTable.vue'
 
 const router = useRouter()
 const scheduleStore = useScheduleStore()

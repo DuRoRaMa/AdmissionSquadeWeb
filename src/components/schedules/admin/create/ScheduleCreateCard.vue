@@ -90,7 +90,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
-import ScheduleNeedsEditor from '@/components/schedules/ScheduleNeedsEditor.vue'
+import ScheduleNeedsEditor from '@/components/schedules/admin/create/needs/ScheduleNeedsEditor.vue'
 
 const props = defineProps({
   squads: {

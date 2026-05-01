@@ -1,32 +1,56 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+
+import AppAlert from '@/components/ui/AppAlert.vue'
 import AppCard from '@/components/ui/AppCard.vue'
+import MyScheduleEntryCard from '@/components/schedules/my/MyScheduleEntryCard.vue'
+
 import { useScheduleStore } from '@/stores/schedule'
 
 const scheduleStore = useScheduleStore()
 
-const form = ref({
-  entry: null,
-  request_type: 'cancel',
-  reason: '',
-  target_membership: null
+const toast = ref({
+  isShown: false,
+  message: '',
+  variant: 'info',
+  key: 0,
 })
 
 onMounted(async () => {
   await scheduleStore.fetchMySchedule()
 })
 
-async function submitRequest(entryId) {
-  form.value.entry = entryId
-  const result = await scheduleStore.createChangeRequest(form.value)
-  alert(result.success ? 'Заявка создана' : result.message)
+async function submitRequest(payload) {
+  const result = await scheduleStore.createChangeRequest(payload)
 
-  form.value = {
-    entry: null,
-    request_type: 'cancel',
-    reason: '',
-    target_membership: null
+  showToast({
+    message: result.success ? 'Заявка успешно отправлена' : result.message,
+    variant: result.success ? 'success' : 'danger',
+  })
+
+  if (result.success) {
+    await scheduleStore.fetchMySchedule()
   }
+}
+
+function showValidationToast(message) {
+  showToast({
+    message,
+    variant: 'warning',
+  })
+}
+
+function showToast({ message, variant = 'info' }) {
+  toast.value = {
+    isShown: true,
+    message: message || 'Действие выполнено',
+    variant,
+    key: toast.value.key + 1,
+  }
+}
+
+function closeToast() {
+  toast.value.isShown = false
 }
 </script>
 
@@ -41,40 +65,26 @@ async function submitRequest(entryId) {
         У вас пока нет назначенных смен.
       </div>
 
-      <div v-else class="entries-list">
-        <div
+      <div v-else class="my-schedule-list">
+        <MyScheduleEntryCard
           v-for="entry in scheduleStore.myEntries"
           :key="entry.id"
-          class="entry-card"
-        >
-          <div class="entry-main">
-            <div class="entry-title">{{ entry.date }}</div>
-            <div><strong>Время:</strong> {{ entry.starts_at }} — {{ entry.ends_at }}</div>
-            <div><strong>Блок:</strong> {{ entry.work_block_code }} — {{ entry.work_block_name }}</div>
-            <div><strong>Статус:</strong> {{ entry.status }}</div>
-          </div>
-
-          <div class="entry-form">
-            <select v-model="form.request_type" class="app-field">
-              <option value="cancel">Не могу выйти</option>
-              <option value="swap">Прошу замену</option>
-              <option value="time_change">Изменение времени</option>
-            </select>
-
-            <textarea
-              v-model="form.reason"
-              class="app-field app-textarea"
-              rows="3"
-              placeholder="Укажите причину"
-            />
-
-            <button class="submit-btn" @click="submitRequest(entry.id)">
-              Отправить заявку
-            </button>
-          </div>
-        </div>
+          :entry="entry"
+          :loading="scheduleStore.isCreatingRequest"
+          @submit-request="submitRequest"
+          @validation-error="showValidationToast"
+        />
       </div>
     </AppCard>
+
+    <AppAlert
+      v-if="toast.isShown"
+      :key="toast.key"
+      :message="toast.message"
+      :variant="toast.variant"
+      :duration="4000"
+      @close="closeToast"
+    />
   </div>
 </template>
 
@@ -85,71 +95,13 @@ async function submitRequest(entryId) {
   gap: 24px;
 }
 
-.entries-list {
+.my-schedule-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.entry-card {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 18px;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: var(--card-border);
-}
-
-.entry-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-color);
-  margin-bottom: 10px;
-}
-
-.entry-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  color: var(--text-color);
-}
-
-.entry-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.app-field {
-  width: 100%;
-  border-radius: 14px;
-  border: var(--card-border);
-  background: var(--header-footer-bg);
-  color: var(--text-color);
-  padding: 12px 14px;
-}
-
-.app-textarea {
-  resize: vertical;
-}
-
-.submit-btn {
-  border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
-  background: var(--accent-gradient);
-  color: white;
-  font-weight: 600;
-}
-
 .muted-state {
   color: var(--text-muted);
-}
-
-@media (max-width: 900px) {
-  .entry-card {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
