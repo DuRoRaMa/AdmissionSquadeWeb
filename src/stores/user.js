@@ -65,7 +65,8 @@ function normalizeUser(rawUser) {
 export const useUserStore = defineStore('user', () => {
   const user = ref(null)
   const isLoading = ref(false)
-
+  const isInitialized = ref(false)
+  let fetchUserPromise = null
   const permissionCodes = computed(() => user.value?.permission_codes ?? [])
   const isAdmin = computed(() => Boolean(user.value?.is_staff))
 
@@ -102,31 +103,52 @@ export const useUserStore = defineStore('user', () => {
     })
   }
 
-  async function fetchUser() {
+  async function fetchUser({ force = false } = {}) {
     const authStore = useAuthStore()
-    if (!authStore.token) return null
+
+    if (!authStore.token) {
+      user.value = null
+      isInitialized.value = true
+      return null
+    }
+
+    if (user.value && !force) {
+      isInitialized.value = true
+      return user.value
+    }
+
+    if (fetchUserPromise) {
+      return fetchUserPromise
+    }
 
     isLoading.value = true
 
-    try {
-      const response = await apiClient.get('api/v1/users/me/')
-      user.value = normalizeUser(response.data)
-      return user.value
-    } catch (error) {
-      if (error.response?.status === 401) {
-        authStore.logout()
+    fetchUserPromise = (async () => {
+      try {
+        const response = await apiClient.get('/api/v1/users/me/')
+        user.value = normalizeUser(response.data)
+        return user.value
+      } catch (error) {
+        if (error.response?.status === 401) {
+          authStore.logout()
+        }
+
+        return null
+      } finally {
+        isLoading.value = false
+        isInitialized.value = true
+        fetchUserPromise = null
       }
-      return null
-    } finally {
-      isLoading.value = false
-    }
+    })()
+
+    return fetchUserPromise
   }
 
   async function updateUser(data) {
     isLoading.value = true
 
     try {
-      const response = await apiClient.patch('api/v1/users/me/', data)
+      const response = await apiClient.patch('/api/v1/users/me/', data)
       user.value = normalizeUser(response.data)
       return user.value
     } catch (error) {
@@ -153,6 +175,7 @@ export const useUserStore = defineStore('user', () => {
     hasAnyPermission,
     hasAllPermissions,
     hasSquadPermission,
+    isInitialized,
   }
 })
 

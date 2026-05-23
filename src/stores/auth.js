@@ -43,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
     return payload?.user_id ?? payload?.userId ?? payload?.sub ?? null
   })
 
-  function setToken(accessToken, refreshToken = null) {
+  function setToken(accessToken, refreshToken = undefined) {
     if (accessToken) {
       localStorage.setItem('token', accessToken)
       token.value = accessToken
@@ -52,10 +52,12 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = null
     }
 
-    if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken)
-    } else {
-      localStorage.removeItem('refreshToken')
+    if (refreshToken !== undefined) {
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken)
+      } else {
+        localStorage.removeItem('refreshToken')
+      }
     }
   }
 
@@ -143,6 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     forgotPassword,
     resetPassword,
+    setToken,
   }
 })
 

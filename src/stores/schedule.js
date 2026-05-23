@@ -61,21 +61,43 @@ function getScheduleNeedsUrl(scheduleId) {
   return `/api/v1/rosters/schedules/${scheduleId}/needs/`
 }
 
-function getEntryDateTime(entry) {
+const QR_BLOCKED_STATUSES = new Set([
+  'completed',
+  'attended',
+  'visited',
+  'cancelled',
+  'missed',
+  'absent',
+])
+
+function getEntryDateTime(entry, timeValue = '00:00') {
   const date = entry?.date
 
   if (!date) {
     return null
   }
 
-  const time = entry.starts_at || entry.start_time || '00:00'
-  const value = new Date(`${date}T${time}`)
+  const value = new Date(`${date}T${timeValue}`)
 
   if (Number.isNaN(value.getTime())) {
     return null
   }
 
   return value
+}
+
+function getEntryStartDateTime(entry) {
+  return getEntryDateTime(entry, entry?.starts_at || entry?.start_time || '00:00')
+}
+
+function getEntryEndDateTime(entry) {
+  return getEntryDateTime(entry, entry?.ends_at || entry?.end_time || '23:59:59')
+}
+
+function canEntryHaveQr(entry) {
+  const status = entry?.status || 'planned'
+
+  return !QR_BLOCKED_STATUSES.has(status)
 }
 
 function getFileNameFromDisposition(disposition, fallback) {
@@ -135,15 +157,17 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     const now = new Date()
 
-    const upcomingEntries = myEntries.value
+    const suitableEntries = myEntries.value
+      .filter(canEntryHaveQr)
       .map((entry) => ({
         entry,
-        dateTime: getEntryDateTime(entry),
+        startsAt: getEntryStartDateTime(entry),
+        endsAt: getEntryEndDateTime(entry),
       }))
-      .filter((item) => item.dateTime && item.dateTime >= now)
-      .sort((first, second) => first.dateTime - second.dateTime)
+      .filter((item) => item.endsAt && item.endsAt >= now)
+      .sort((first, second) => first.startsAt - second.startsAt)
 
-    return upcomingEntries[0]?.entry || null
+    return suitableEntries[0]?.entry || null
   })
 
   async function fetchMySchedule() {
@@ -569,7 +593,23 @@ export const useScheduleStore = defineStore('schedule', () => {
       isLoading.value = false
     }
   }
+  async function createQrToken(entryId) {
+    try {
+      const response = await apiClient.post(`api/v1/rosters/entries/${entryId}/qr/`)
 
+      return {
+        success: true,
+        token: response.data.token,
+        expiresAt: response.data.expires_at,
+        message: response.data.message || 'QR-код создан',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось создать QR-код'),
+      }
+    }
+  }
   async function getScheduleById(scheduleId) {
     const localSchedule = schedules.value.find((item) => String(item.id) === String(scheduleId))
 
@@ -605,7 +645,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     schedules,
     entries,
     editData,
-
     myEntries,
     myRequests,
     adminRequests,
@@ -643,5 +682,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     saveScheduleAssignments: saveScheduleDayAssignments,
     exportSchedule,
     getScheduleById,
+    createQrToken,
+    getEntryStartDateTime,
+    getEntryEndDateTime,
+    canEntryHaveQr,
   }
 })

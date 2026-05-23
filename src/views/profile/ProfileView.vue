@@ -41,7 +41,7 @@ function handleUserUpdate(updatedUser) {
         <UserQrCard
           :entry-id="scheduleStore.nearestEntry?.id || null"
           title="Личный QR-код"
-          subtitle="Быстрый доступ к отметке прямо из профиля"
+          subtitle="Показывается только для ближайшего назначенного дня"
         />
       </div>
     </div>

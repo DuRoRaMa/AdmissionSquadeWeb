@@ -17,6 +17,14 @@ const apiClient = axios.create({
 let isRefreshing = false
 let failedQueue = []
 
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
 const processQueue = (error, token = null) => {
   failedQueue.forEach(prom => {
     if (error) {
@@ -66,24 +74,31 @@ apiClient.interceptors.response.use(
         return Promise.reject(error)
       }
 
-      try {
-        const response = await axios.post('/api/v1/users/auth/token/refresh/', {
-          refresh: refreshToken,
-        })
-        const { access } = response.data
-        localStorage.setItem('token', access)
-        // Обновляем заголовок авторизации для повторного запроса
-        originalRequest.headers.Authorization = `Bearer ${access}`
-        processQueue(null, access)
-        return apiClient(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        const authStore = useAuthStore()
-        authStore.logout()
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
-      }
+    try {
+      const response = await refreshClient.post('api/v1/users/auth/token/refresh/', {
+        refresh: refreshToken,
+      })
+
+      const { access } = response.data
+
+      const authStore = useAuthStore()
+      authStore.setToken(access)
+
+      originalRequest.headers.Authorization = `Bearer ${access}`
+
+      processQueue(null, access)
+
+      return apiClient(originalRequest)
+    } catch (refreshError) {
+      processQueue(refreshError, null)
+
+      const authStore = useAuthStore()
+      authStore.logout()
+
+      return Promise.reject(refreshError)
+    } finally {
+      isRefreshing = false
+    }
     }
     return Promise.reject(error)
   }

@@ -153,7 +153,7 @@ function showValidationError(message) {
       />
     </section>
 
-    <aside class="my-entry-card__request">
+    <aside class="my-entry-card__side">
       <MyScheduleRequestForm
         :entry-id="entry.id"
         :loading="loading"
@@ -246,7 +246,10 @@ function showValidationError(message) {
   margin-top: 2px;
 }
 
-.my-entry-card__request {
+.my-entry-card__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   padding-left: 18px;
   border-left: var(--card-border);
 }
@@ -256,11 +259,11 @@ function showValidationError(message) {
     grid-template-columns: 1fr;
   }
 
-  .my-entry-card__request {
-    padding-top: 14px;
+  .my-entry-card__side {
     padding-left: 0;
+    border-left: none;
     border-top: var(--card-border);
-    border-left: 0;
+    padding-top: 14px;
   }
 }
 </style>

@@ -1,32 +1,102 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import QRCode from 'qrcode'
+
 import AppCard from '@/components/ui/AppCard.vue'
 import { useScheduleStore } from '@/stores/schedule'
 
 const props = defineProps({
   entryId: {
     type: Number,
-    default: null
+    default: null,
   },
   title: {
     type: String,
-    default: 'QR для отметки'
+    default: 'QR для отметки',
   },
   subtitle: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
+
+const TOKEN_REFRESH_MS = 3 * 60 * 1000
+const SAFETY_REFRESH_MS = 10 * 1000
+const TEMP_SECURITY_HIDE_MS = 3000
 
 const scheduleStore = useScheduleStore()
 
-const qrData = ref(null)
+const canvasRef = ref(null)
+const token = ref('')
+const expiresAt = ref('')
+const secondsLeft = ref(0)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const isHiddenForSecurity = ref(false)
 
-async function loadQr() {
+let refreshTimerId = null
+let countdownTimerId = null
+let securityTimerId = null
+
+const expiresLabel = computed(() => {
+  if (!secondsLeft.value) {
+    return 'обновляется'
+  }
+
+  const minutes = Math.floor(secondsLeft.value / 60)
+  const seconds = secondsLeft.value % 60
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+})
+
+watch(
+  () => props.entryId,
+  async () => {
+    resetQrState()
+
+    if (props.entryId) {
+      await refreshQr()
+      startRefreshTimer()
+      startCountdown()
+    }
+  },
+)
+
+onMounted(async () => {
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  document.addEventListener('contextmenu', temporarilyHideQrForSecurity)
+  document.addEventListener('copy', temporarilyHideQrForSecurity)
+  window.addEventListener('blur', hideQrForSecurity)
+  window.addEventListener('focus', restoreQrAfterFocus)
+  window.addEventListener('beforeprint', hideQrForSecurity)
+  window.addEventListener('afterprint', restoreQrAfterFocus)
+  window.addEventListener('keydown', handleSecurityKeydown)
+
+  if (props.entryId) {
+    await refreshQr()
+    startRefreshTimer()
+    startCountdown()
+  }
+})
+
+onBeforeUnmount(() => {
+  stopRefreshTimer()
+  stopCountdown()
+  stopSecurityTimer()
+
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  document.removeEventListener('contextmenu', temporarilyHideQrForSecurity)
+  document.removeEventListener('copy', temporarilyHideQrForSecurity)
+  window.removeEventListener('blur', hideQrForSecurity)
+  window.removeEventListener('focus', restoreQrAfterFocus)
+  window.removeEventListener('beforeprint', hideQrForSecurity)
+  window.removeEventListener('afterprint', restoreQrAfterFocus)
+  window.removeEventListener('keydown', handleSecurityKeydown)
+})
+
+async function refreshQr() {
   if (!props.entryId) {
-    errorMessage.value = 'Нет активной смены для получения QR-кода.'
+    resetQrState()
     return
   }
 
@@ -35,54 +105,231 @@ async function loadQr() {
 
   const result = await scheduleStore.createQr(props.entryId)
 
-  if (result.success) {
-    qrData.value = result.data
-  } else {
+  if (!result.success) {
+    token.value = ''
+    expiresAt.value = ''
+    secondsLeft.value = 0
     errorMessage.value = result.message
+    clearCanvas()
+    isLoading.value = false
+    return
   }
 
+  token.value = result.data?.token || ''
+  expiresAt.value = result.data?.expires_at || ''
+  updateSecondsLeft()
+
+  await nextTick()
+  await renderQr()
+
   isLoading.value = false
+}
+
+async function renderQr() {
+  if (!canvasRef.value || !token.value || isHiddenForSecurity.value) {
+    return
+  }
+
+  await QRCode.toCanvas(canvasRef.value, token.value, {
+    width: 190,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+  })
+}
+
+function startRefreshTimer() {
+  stopRefreshTimer()
+
+  refreshTimerId = window.setInterval(() => {
+    refreshQr()
+  }, TOKEN_REFRESH_MS - SAFETY_REFRESH_MS)
+}
+
+function stopRefreshTimer() {
+  if (refreshTimerId) {
+    window.clearInterval(refreshTimerId)
+    refreshTimerId = null
+  }
+}
+
+function startCountdown() {
+  stopCountdown()
+
+  countdownTimerId = window.setInterval(() => {
+    updateSecondsLeft()
+  }, 1000)
+}
+
+function stopCountdown() {
+  if (countdownTimerId) {
+    window.clearInterval(countdownTimerId)
+    countdownTimerId = null
+  }
+}
+
+function stopSecurityTimer() {
+  if (securityTimerId) {
+    window.clearTimeout(securityTimerId)
+    securityTimerId = null
+  }
+}
+
+function updateSecondsLeft() {
+  if (!expiresAt.value) {
+    secondsLeft.value = 0
+    return
+  }
+
+  const diffMs = new Date(expiresAt.value).getTime() - Date.now()
+  secondsLeft.value = Math.max(0, Math.ceil(diffMs / 1000))
+
+  if (secondsLeft.value <= 0 && !isLoading.value) {
+    refreshQr()
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    hideQrForSecurity()
+    return
+  }
+
+  restoreQrAfterFocus()
+}
+
+function handleSecurityKeydown(event) {
+  const key = String(event.key || '').toLowerCase()
+
+  const isPrintScreen = key === 'printscreen'
+  const isScreenshotShortcut =
+    (event.metaKey && event.shiftKey && key === 's') ||
+    (event.ctrlKey && event.shiftKey && key === 's')
+
+  if (isPrintScreen || isScreenshotShortcut) {
+    temporarilyHideQrForSecurity()
+  }
+}
+
+function hideQrForSecurity() {
+  isHiddenForSecurity.value = true
+  clearCanvas()
+}
+
+async function restoreQrAfterFocus() {
+  if (document.hidden) {
+    return
+  }
+
+  isHiddenForSecurity.value = false
+
+  await nextTick()
+
+  if (!token.value || secondsLeft.value <= 15) {
+    await refreshQr()
+    return
+  }
+
+  await renderQr()
+}
+
+function temporarilyHideQrForSecurity() {
+  hideQrForSecurity()
+  stopSecurityTimer()
+
+  securityTimerId = window.setTimeout(() => {
+    restoreQrAfterFocus()
+  }, TEMP_SECURITY_HIDE_MS)
+}
+
+function clearCanvas() {
+  if (!canvasRef.value) {
+    return
+  }
+
+  const context = canvasRef.value.getContext('2d')
+
+  if (!context) {
+    return
+  }
+
+  context.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+}
+
+function resetQrState() {
+  stopRefreshTimer()
+  stopCountdown()
+  stopSecurityTimer()
+
+  token.value = ''
+  expiresAt.value = ''
+  secondsLeft.value = 0
+  errorMessage.value = ''
+  isLoading.value = false
+  isHiddenForSecurity.value = false
+
+  clearCanvas()
 }
 </script>
 
 <template>
-  <AppCard>
+  <AppCard class="user-qr-card">
     <template #header>
       <div class="qr-header">
         <div>
           <div class="qr-title">{{ title }}</div>
           <div v-if="subtitle" class="qr-subtitle">{{ subtitle }}</div>
         </div>
+
         <span class="qr-badge">QR</span>
       </div>
     </template>
 
     <div class="qr-content">
       <div v-if="!entryId" class="empty-state">
-        Сейчас нет смены, для которой можно показать QR-код.
+        QR-код появится, когда у вас будет ближайшая назначенная смена.
       </div>
 
-      <div v-else>
-        <button class="qr-button" @click="loadQr" :disabled="isLoading">
-          {{ isLoading ? 'Загрузка...' : 'Показать QR-код' }}
-        </button>
+      <template v-else>
+        <div class="qr-frame">
+          <canvas
+            ref="canvasRef"
+            v-show="token && !isHiddenForSecurity && !errorMessage"
+            class="qr-canvas"
+            aria-label="QR-код для отметки на смене"
+          />
 
-        <div v-if="errorMessage" class="qr-error">
-          {{ errorMessage }}
-        </div>
-
-        <div v-if="qrData" class="qr-result">
-          <div class="qr-placeholder">
-            <div class="qr-placeholder-title">QR placeholder</div>
-            <div class="qr-token">{{ qrData.token }}</div>
+          <div v-if="isHiddenForSecurity" class="qr-placeholder qr-placeholder--protected">
+            QR скрыт для защиты
           </div>
 
-          <div class="qr-meta">
-            <div><strong>Токен:</strong> {{ qrData.token }}</div>
-            <div><strong>Действует до:</strong> {{ qrData.expires_at }}</div>
+          <div v-else-if="isLoading && !token" class="qr-placeholder">
+            Генерация QR...
+          </div>
+
+          <div v-else-if="errorMessage" class="qr-placeholder qr-placeholder--error">
+            {{ errorMessage }}
           </div>
         </div>
-      </div>
+
+        <div class="qr-footer">
+          <div class="qr-timer">
+            Действует: {{ expiresLabel }}
+          </div>
+
+          <button
+            type="button"
+            class="qr-refresh"
+            :disabled="isLoading"
+            @click="refreshQr"
+          >
+            {{ isLoading ? 'Обновление...' : 'Обновить' }}
+          </button>
+        </div>
+
+        <div class="qr-note">
+          Код автоматически обновляется каждые 3 минуты.
+        </div>
+      </template>
     </div>
   </AppCard>
 </template>
@@ -119,66 +366,86 @@ async function loadQr() {
 .qr-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .empty-state {
   color: var(--text-muted);
 }
 
-.qr-button {
-  width: 100%;
-  border: none;
-  border-radius: 14px;
-  padding: 12px 16px;
-  background: var(--accent-gradient);
-  color: white;
-  font-weight: 600;
-}
-
-.qr-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.qr-error {
-  border-radius: 12px;
-  padding: 12px;
-  background: rgba(220, 53, 69, 0.12);
-  color: #ff8f9b;
-}
-
-.qr-result {
+.qr-frame {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+}
+
+.qr-canvas {
+  width: 190px;
+  height: 190px;
+  padding: 10px;
+  border-radius: 18px;
+  background: #ffffff;
 }
 
 .qr-placeholder {
-  border-radius: 18px;
-  padding: 24px 16px;
-  text-align: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: var(--card-border);
-}
-
-.qr-placeholder-title {
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: var(--text-color);
-}
-
-.qr-token {
-  word-break: break-all;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.qr-meta {
-  font-size: 0.9rem;
-  color: var(--text-color);
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  width: 190px;
+  min-height: 190px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed color-mix(in srgb, var(--text-muted) 45%, transparent);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.qr-placeholder--protected {
+  color: var(--warning-color, #ffc107);
+}
+
+.qr-placeholder--error {
+  color: var(--danger-color, #dc3545);
+}
+
+.qr-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.qr-timer {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.qr-refresh {
+  border: var(--card-border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--text-color);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.qr-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.qr-note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+@media print {
+  .user-qr-card {
+    display: none !important;
+  }
 }
 </style>

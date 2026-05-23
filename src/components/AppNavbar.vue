@@ -39,6 +39,17 @@ const visibleSquadItems = computed(() =>
 const workLandingLink = computed(() => {
   return visibleWorkItems.value[0]?.to || '/availability'
 })
+const isUserReady = computed(() => {
+  return !authStore.isAuthenticated || userStore.isInitialized
+})
+
+const displayName = computed(() => {
+  if (authStore.isAuthenticated && !isUserReady.value) {
+    return 'Загрузка...'
+  }
+
+  return userStore.user?.first_name || userStore.user?.email || 'Пользователь'
+})
 
 const squadLandingLink = computed(() => {
   return visibleSquadItems.value[0]?.to || '/squads'
@@ -56,7 +67,7 @@ const sectionLinks = computed(() => {
   const links = [{ label: 'Главная', to: '/', section: 'home' }]
 
   if (!authStore.isAuthenticated) return links
-
+  if (!isUserReady.value) return links
   if (visibleWorkItems.value.length) {
     links.push({
       label: 'Работа',
@@ -159,7 +170,7 @@ watch(
               class="app-topbar__user"
               @click="closeMobileMenu"
             >
-              {{ userStore.user?.first_name || userStore.user?.email || 'Пользователь' }}
+              {{ displayName }}
             </RouterLink>
 
             <button class="app-icon-btn" @click="themeStore.toggleTheme" type="button">

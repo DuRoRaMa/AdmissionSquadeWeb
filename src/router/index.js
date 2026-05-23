@@ -227,6 +227,16 @@ router.beforeEach(async (to, from, next) => {
     await userStore.fetchUser()
   }
 
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login' })
+    return
+  }
+
+  if (to.meta.requiresAuth && authStore.isAuthenticated && !userStore.user) {
+    next({ name: 'login' })
+    return
+  }
+
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
     next({ name: 'home' })
     return
