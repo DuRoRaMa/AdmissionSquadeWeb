@@ -1,97 +1,151 @@
+// stores/auth.js
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import apiClient from '../axios'
+import { useUserStore } from './user'
+
+function decodeBase64Url(value) {
+  if (!value) return null
+
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    return atob(padded)
+  } catch {
+    return null
+  }
+}
+
+function parseJwt(tokenValue) {
+  if (!tokenValue) return null
+
+  const parts = tokenValue.split('.')
+  if (parts.length < 2) return null
+
+  const payload = decodeBase64Url(parts[1])
+  if (!payload) return null
+
+  try {
+    return JSON.parse(payload)
+  } catch {
+    return null
+  }
+}
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null)
   const token = ref(localStorage.getItem('token') || null)
   const isLoading = ref(false)
 
   const isAuthenticated = computed(() => !!token.value)
+  const tokenPayload = computed(() => parseJwt(token.value))
+  const currentUserId = computed(() => {
+    const payload = tokenPayload.value
+    return payload?.user_id ?? payload?.userId ?? payload?.sub ?? null
+  })
 
-  function setToken(newToken) {
-    token.value = newToken
-    if (newToken) {
-      localStorage.setItem('token', newToken)
+  function setToken(accessToken, refreshToken = undefined) {
+    if (accessToken) {
+      localStorage.setItem('token', accessToken)
+      token.value = accessToken
     } else {
       localStorage.removeItem('token')
+      token.value = null
+    }
+
+    if (refreshToken !== undefined) {
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken)
+      } else {
+        localStorage.removeItem('refreshToken')
+      }
     }
   }
 
   async function login(credentials) {
     isLoading.value = true
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      // Эмуляция проверки
-      if (credentials.email === 'test@example.com' && credentials.password === '123456') {
-        const fakeToken = 'fake-jwt-token-' + Date.now()
-        const fakeUser = { id: 1, email: credentials.email, username: 'Test User' }
-        setToken(fakeToken)
-        user.value = fakeUser
-        return { success: true, user: fakeUser }
-      } else {
-        return { success: false, message: 'Неверный email или пароль' }
-      }
+      const tokenResponse = await apiClient.post('api/v1/users/auth/token/', {
+        email: credentials.email,
+        password: credentials.password,
+      })
+
+      const { access, refresh } = tokenResponse.data
+      setToken(access, refresh)
+
+      const userStore = useUserStore()
+      await userStore.fetchUser()
+
+      return { success: true, user: userStore.user }
+    } catch (error) {
+      const message =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message ||
+        'Ошибка входа'
+
+      return { success: false, message }
     } finally {
       isLoading.value = false
     }
   }
 
   function logout() {
-    setToken(null)
-    user.value = null
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    token.value = null
+
+    const userStore = useUserStore()
+    userStore.clearUser()
   }
 
   async function register(userData) {
     isLoading.value = true
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const fakeToken = 'fake-jwt-token-' + Date.now()
-      const fakeUser = {
-        id: Date.now(),
-        email: userData.email,
-        username: userData.username,
-        last_name: userData.last_name,
-        first_name: userData.first_name,
-        middle_name: userData.middle_name,
+      const response = await apiClient.post('api/v1/users/register/', userData)
+      return {
+        success: true,
+        message: response.data.message,
+        user: response.data.data,
       }
-      setToken(fakeToken)
-      user.value = fakeUser
-      return { success: true, user: fakeUser }
+    } catch (error) {
+      const message =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message ||
+        'Ошибка регистрации'
+
+      return { success: false, message }
     } finally {
       isLoading.value = false
     }
   }
 
-  async function forgotPassword(email) {
-    isLoading.value = true
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      return { success: true, message: 'Инструкция отправлена на почту' }
-    } finally {
-      isLoading.value = false
+  async function forgotPassword() {
+    return {
+      success: false,
+      message: 'Функция восстановления пароля пока не реализована',
     }
   }
 
-  async function resetPassword(data) {
-    isLoading.value = true
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      return { success: true, message: 'Пароль изменён' }
-    } finally {
-      isLoading.value = false
+  async function resetPassword() {
+    return {
+      success: false,
+      message: 'Функция сброса пароля пока не реализована',
     }
   }
 
   return {
-    user,
     token,
     isLoading,
     isAuthenticated,
+    tokenPayload,
+    currentUserId,
     login,
     logout,
     register,
     forgotPassword,
     resetPassword,
+    setToken,
   }
 })
 
