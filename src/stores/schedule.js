@@ -61,15 +61,6 @@ function getScheduleNeedsUrl(scheduleId) {
   return `/api/v1/rosters/schedules/${scheduleId}/needs/`
 }
 
-const QR_BLOCKED_STATUSES = new Set([
-  'completed',
-  'attended',
-  'visited',
-  'cancelled',
-  'missed',
-  'absent',
-])
-
 function getEntryDateTime(entry, timeValue = '00:00') {
   const date = entry?.date
 
@@ -94,23 +85,19 @@ function getEntryEndDateTime(entry) {
   return getEntryDateTime(entry, entry?.ends_at || entry?.end_time || '23:59:59')
 }
 
-function canEntryHaveQr(entry) {
-  const status = entry?.status || 'planned'
-
-  return !QR_BLOCKED_STATUSES.has(status)
-}
-
 function getFileNameFromDisposition(disposition, fallback) {
   if (!disposition) {
     return fallback
   }
 
   const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+
   if (utfMatch?.[1]) {
     return decodeURIComponent(utfMatch[1])
   }
 
   const defaultMatch = disposition.match(/filename="?([^"]+)"?/i)
+
   if (defaultMatch?.[1]) {
     return defaultMatch[1]
   }
@@ -124,11 +111,127 @@ function downloadBlob(blob, filename) {
 
   link.href = url
   link.download = filename
+
   document.body.appendChild(link)
   link.click()
   link.remove()
 
   window.URL.revokeObjectURL(url)
+}
+
+function normalizeParams(params) {
+  if (!params) {
+    return {}
+  }
+
+  if (typeof params === 'string') {
+    return params ? { date: params } : {}
+  }
+
+  return params
+}
+
+function pickDefined(...values) {
+  return values.find((value) => value !== undefined)
+}
+
+const QR_BLOCKED_STATUSES = new Set([
+  'completed',
+  'attended',
+  'visited',
+  'cancelled',
+  'missed',
+  'absent',
+])
+
+function getEntryStatus(entry) {
+  return entry?.attendance_status || entry?.status || 'planned'
+}
+
+function canEntryHaveQr(entry) {
+  const status = getEntryStatus(entry)
+
+  return !QR_BLOCKED_STATUSES.has(status)
+}
+
+function extractEntryIdFromAttendanceResponse(data) {
+  return data?.entry?.id || data?.entry_id || data?.id || null
+}
+
+function mergeEntryAttendanceData(entry, data) {
+  const responseEntry = data?.entry || data || {}
+  const record = data?.record || data?.attendance_record || {}
+  const entryId = extractEntryIdFromAttendanceResponse(data)
+
+  if (!entryId || String(entry?.id) !== String(entryId)) {
+    return entry
+  }
+
+  const nextEntry = {
+    ...entry,
+  }
+
+  const status = pickDefined(
+    responseEntry.attendance_status,
+    responseEntry.status,
+    data?.attendance_status,
+    data?.status,
+  )
+
+  const statusLabel = pickDefined(
+    responseEntry.attendance_status_label,
+    responseEntry.status_label,
+    data?.attendance_status_label,
+    data?.status_label,
+  )
+
+  const checkedInAt = pickDefined(
+    record.checked_in_at,
+    responseEntry.checked_in_at,
+    data?.checked_in_at,
+  )
+
+  const checkedOutAt = pickDefined(
+    record.checked_out_at,
+    responseEntry.checked_out_at,
+    data?.checked_out_at,
+  )
+
+  if (status !== undefined) {
+    nextEntry.status = status
+    nextEntry.attendance_status = status
+  }
+
+  if (statusLabel !== undefined) {
+    nextEntry.status_label = statusLabel
+    nextEntry.attendance_status_label = statusLabel
+  }
+
+  if (checkedInAt !== undefined) {
+    nextEntry.checked_in_at = checkedInAt
+  }
+
+  if (checkedOutAt !== undefined) {
+    nextEntry.checked_out_at = checkedOutAt
+  }
+
+  const hasCheckIn = Boolean(nextEntry.checked_in_at)
+  const hasCheckOut = Boolean(nextEntry.checked_out_at)
+
+  nextEntry.can_manual_check_in = !hasCheckIn
+  nextEntry.can_manual_check_out = hasCheckIn && !hasCheckOut
+
+  return nextEntry
+}
+
+function updateEntryListAttendance(list, data) {
+  const entryId = extractEntryIdFromAttendanceResponse(data)
+
+  if (!entryId || !Array.isArray(list)) {
+    return list
+  }
+
+  return list.map((entry) => mergeEntryAttendanceData(entry, data))
 }
 
 export const useScheduleStore = defineStore('schedule', () => {
@@ -140,6 +243,9 @@ export const useScheduleStore = defineStore('schedule', () => {
   const myRequests = ref([])
   const adminRequests = ref([])
 
+  const attendanceEntries = ref([])
+  const attendanceLogs = ref([])
+
   const isLoading = ref(false)
   const isGenerating = ref(false)
   const isPublishing = ref(false)
@@ -149,6 +255,9 @@ export const useScheduleStore = defineStore('schedule', () => {
   const isCreatingRequest = ref(false)
   const isProcessingRequest = ref(false)
   const isQrLoading = ref(false)
+  const isAttendanceEntriesLoading = ref(false)
+  const isAttendanceLogsLoading = ref(false)
+  const isManualAttendanceProcessing = ref(false)
 
   const nearestEntry = computed(() => {
     if (!Array.isArray(myEntries.value) || !myEntries.value.length) {
@@ -165,10 +274,42 @@ export const useScheduleStore = defineStore('schedule', () => {
         endsAt: getEntryEndDateTime(entry),
       }))
       .filter((item) => item.endsAt && item.endsAt >= now)
-      .sort((first, second) => first.startsAt - second.startsAt)
+      .sort((first, second) => {
+        if (!first.startsAt && !second.startsAt) return 0
+        if (!first.startsAt) return 1
+        if (!second.startsAt) return -1
+
+        return first.startsAt - second.startsAt
+      })
 
     return suitableEntries[0]?.entry || null
   })
+
+  function syncAttendanceFromResponse(data) {
+    const entryId = extractEntryIdFromAttendanceResponse(data)
+
+    if (!entryId) {
+      return
+    }
+
+    myEntries.value = updateEntryListAttendance(myEntries.value, data)
+    entries.value = updateEntryListAttendance(entries.value, data)
+    attendanceEntries.value = updateEntryListAttendance(attendanceEntries.value, data)
+
+    if (editData.value?.entries && Array.isArray(editData.value.entries)) {
+      editData.value = {
+        ...editData.value,
+        entries: updateEntryListAttendance(editData.value.entries, data),
+      }
+    }
+
+    if (editData.value?.assignments && Array.isArray(editData.value.assignments)) {
+      editData.value = {
+        ...editData.value,
+        assignments: updateEntryListAttendance(editData.value.assignments, data),
+      }
+    }
+  }
 
   async function fetchMySchedule() {
     isLoading.value = true
@@ -326,11 +467,21 @@ export const useScheduleStore = defineStore('schedule', () => {
       return {
         success: true,
         data: response.data,
+        token: response.data?.token,
+        action: response.data?.action,
+        actionLabel: response.data?.action_label,
+        expiresAt: response.data?.expires_at,
         message: response.data?.message || 'QR-код создан',
       }
     } catch (error) {
+      const data = error?.response?.data
+
       return {
         success: false,
+        data,
+        status: data?.status,
+        availableAt: data?.available_at,
+        secondsLeft: data?.seconds_left,
         message: getErrorMessage(error, 'Не удалось создать QR-код'),
       }
     } finally {
@@ -338,24 +489,142 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
-  async function scanQr(payload) {
+  async function createQrToken(entryId) {
+    return createQr(entryId)
+  }
+
+  async function scanQr(tokenOrPayload) {
     isQrLoading.value = true
+
+    const payload =
+      typeof tokenOrPayload === 'string'
+        ? { token: tokenOrPayload }
+        : tokenOrPayload
 
     try {
       const response = await apiClient.post('/api/v1/rosters/scan-qr/', payload)
 
+      syncAttendanceFromResponse(response.data)
+
       return {
         success: true,
         data: response.data,
+        action: response.data?.action,
+        entry: response.data?.entry,
+        record: response.data?.record,
         message: response.data?.message || 'Посещение отмечено',
       }
     } catch (error) {
+      const data = error?.response?.data
+
       return {
         success: false,
+        data,
+        status: data?.status,
+        availableAt: data?.available_at,
+        secondsLeft: data?.seconds_left,
         message: getErrorMessage(error, 'Не удалось отметить посещение'),
       }
     } finally {
       isQrLoading.value = false
+    }
+  }
+
+  async function fetchAttendanceEntries(params = {}) {
+    isAttendanceEntriesLoading.value = true
+
+    try {
+      const response = await apiClient.get('/api/v1/rosters/attendance-entries/', {
+        params: normalizeParams(params),
+      })
+
+      attendanceEntries.value = normalizeListResponse(response.data)
+
+      return {
+        success: true,
+        data: attendanceEntries.value,
+      }
+    } catch (error) {
+      attendanceEntries.value = []
+
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось загрузить список назначенных участников'),
+      }
+    } finally {
+      isAttendanceEntriesLoading.value = false
+    }
+  }
+
+  async function manualCheckIn(entryId) {
+    isManualAttendanceProcessing.value = true
+
+    try {
+      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/manual-check-in/`)
+
+      syncAttendanceFromResponse(response.data)
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'Приход учтён вручную',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось учесть приход вручную'),
+      }
+    } finally {
+      isManualAttendanceProcessing.value = false
+    }
+  }
+
+  async function manualCheckOut(entryId) {
+    isManualAttendanceProcessing.value = true
+
+    try {
+      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/manual-check-out/`)
+
+      syncAttendanceFromResponse(response.data)
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data?.message || 'Уход учтён вручную',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось учесть уход вручную'),
+      }
+    } finally {
+      isManualAttendanceProcessing.value = false
+    }
+  }
+
+  async function fetchAttendanceLogs(params = {}) {
+    isAttendanceLogsLoading.value = true
+
+    try {
+      const response = await apiClient.get('/api/v1/rosters/attendance-logs/', {
+        params: normalizeParams(params),
+      })
+
+      attendanceLogs.value = normalizeListResponse(response.data)
+
+      return {
+        success: true,
+        data: attendanceLogs.value,
+      }
+    } catch (error) {
+      attendanceLogs.value = []
+
+      return {
+        success: false,
+        message: getErrorMessage(error, 'Не удалось загрузить журнал сканирований'),
+      }
+    } finally {
+      isAttendanceLogsLoading.value = false
     }
   }
 
@@ -364,6 +633,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     try {
       const response = await apiClient.get('/api/v1/rosters/schedules/')
+
       schedules.value = normalizeListResponse(response.data)
 
       return {
@@ -393,7 +663,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       return {
         success: true,
         data: response.data,
-        message: 'Черновик графика создан',
+        message: response.data?.message || 'Черновик графика создан',
       }
     } catch (error) {
       return {
@@ -479,6 +749,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     try {
       const response = await apiClient.get(`/api/v1/rosters/schedules/${scheduleId}/entries/`)
+
       entries.value = normalizeListResponse(response.data)
 
       return {
@@ -593,23 +864,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       isLoading.value = false
     }
   }
-  async function createQrToken(entryId) {
-    try {
-      const response = await apiClient.post(`api/v1/rosters/entries/${entryId}/qr/`)
 
-      return {
-        success: true,
-        token: response.data.token,
-        expiresAt: response.data.expires_at,
-        message: response.data.message || 'QR-код создан',
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: getErrorMessage(error, 'Не удалось создать QR-код'),
-      }
-    }
-  }
   async function getScheduleById(scheduleId) {
     const localSchedule = schedules.value.find((item) => String(item.id) === String(scheduleId))
 
@@ -648,6 +903,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     myEntries,
     myRequests,
     adminRequests,
+    attendanceEntries,
+    attendanceLogs,
+
     nearestEntry,
 
     isLoading,
@@ -659,6 +917,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     isCreatingRequest,
     isProcessingRequest,
     isQrLoading,
+    isAttendanceEntriesLoading,
+    isAttendanceLogsLoading,
+    isManualAttendanceProcessing,
 
     fetchMySchedule,
     fetchMyRequests,
@@ -666,8 +927,14 @@ export const useScheduleStore = defineStore('schedule', () => {
     createChangeRequest,
     approveChangeRequest,
     rejectChangeRequest,
+
     createQr,
+    createQrToken,
     scanQr,
+    fetchAttendanceEntries,
+    manualCheckIn,
+    manualCheckOut,
+    fetchAttendanceLogs,
 
     fetchSchedules,
     createSchedule,
@@ -682,9 +949,10 @@ export const useScheduleStore = defineStore('schedule', () => {
     saveScheduleAssignments: saveScheduleDayAssignments,
     exportSchedule,
     getScheduleById,
-    createQrToken,
+
     getEntryStartDateTime,
     getEntryEndDateTime,
     canEntryHaveQr,
+    syncAttendanceFromResponse,
   }
 })
