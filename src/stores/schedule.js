@@ -258,6 +258,8 @@ export const useScheduleStore = defineStore('schedule', () => {
   const isAttendanceEntriesLoading = ref(false)
   const isAttendanceLogsLoading = ref(false)
   const isManualAttendanceProcessing = ref(false)
+  const replacementCandidatesByEntry = ref({})
+  const replacementCandidatesLoadingEntryId = ref(null)
 
   const nearestEntry = computed(() => {
     if (!Array.isArray(myEntries.value) || !myEntries.value.length) {
@@ -284,7 +286,45 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     return suitableEntries[0]?.entry || null
   })
+  async function fetchReplacementCandidates(entryId) {
+    replacementCandidatesLoadingEntryId.value = entryId
 
+    try {
+      const response = await apiClient.get(
+        `/api/v1/rosters/entries/${entryId}/replacement-candidates/`,
+      )
+
+      const candidates = normalizeListResponse(response.data)
+
+      replacementCandidatesByEntry.value = {
+        ...replacementCandidatesByEntry.value,
+        [entryId]: candidates,
+      }
+
+      return {
+        success: true,
+        data: candidates,
+      }
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        'Не удалось загрузить участников на замену',
+      )
+
+      replacementCandidatesByEntry.value = {
+        ...replacementCandidatesByEntry.value,
+        [entryId]: [],
+      }
+
+      return {
+        success: false,
+        message,
+        data: [],
+      }
+    } finally {
+      replacementCandidatesLoadingEntryId.value = null
+    }
+  }
   function syncAttendanceFromResponse(data) {
     const entryId = extractEntryIdFromAttendanceResponse(data)
 
@@ -954,5 +994,8 @@ export const useScheduleStore = defineStore('schedule', () => {
     getEntryEndDateTime,
     canEntryHaveQr,
     syncAttendanceFromResponse,
+    replacementCandidatesByEntry,
+    replacementCandidatesLoadingEntryId,
+    fetchReplacementCandidates,
   }
 })

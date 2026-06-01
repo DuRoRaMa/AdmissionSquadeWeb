@@ -29,6 +29,44 @@ const isSubmitted = computed(() => {
   return Boolean(activeForm.value?.is_submitted)
 })
 
+const submittedSlots = computed(() => {
+  return activeForm.value?.user_slots || []
+})
+
+const deadlineExpired = computed(() => {
+  if (typeof activeForm.value?.deadline_expired === 'boolean') {
+    return activeForm.value.deadline_expired
+  }
+
+  if (!activeForm.value?.response_deadline) {
+    return false
+  }
+
+  const deadline = new Date(activeForm.value.response_deadline)
+
+  if (Number.isNaN(deadline.getTime())) {
+    return false
+  }
+
+  return new Date() > deadline
+})
+
+const canEdit = computed(() => {
+  if (typeof activeForm.value?.can_edit === 'boolean') {
+    return activeForm.value.can_edit
+  }
+
+  return activeForm.value?.status === 'open' && !deadlineExpired.value
+})
+
+const isReadonly = computed(() => {
+  if (typeof activeForm.value?.is_readonly === 'boolean') {
+    return activeForm.value.is_readonly
+  }
+
+  return !canEdit.value
+})
+
 const workBlockOptions = computed(() => {
   const blocks = activeForm.value?.work_blocks || []
 
@@ -45,6 +83,10 @@ const canChooseWorkBlock = computed(() => {
   )
 })
 
+const selectedCount = computed(() => {
+  return Object.values(answers.value).filter((answer) => answer.is_available).length
+})
+
 const preparedSlots = computed(() => {
   return Object.entries(answers.value).map(([shiftId, answer]) => ({
     shift_id: Number(shiftId),
@@ -53,7 +95,6 @@ const preparedSlots = computed(() => {
       answer.is_available && answer.preferred_work_block
         ? Number(answer.preferred_work_block)
         : null,
-    comment: answer.comment || '',
   }))
 })
 
@@ -66,12 +107,32 @@ function initAnswers() {
       initialAnswers[shift.id] = {
         is_available: false,
         preferred_work_block: '',
-        comment: '',
       }
     })
   })
 
+  submittedSlots.value.forEach((slot) => {
+    const shiftId = slot.shift?.id || slot.shift_id
+
+    if (!shiftId) return
+
+    initialAnswers[shiftId] = {
+      is_available: Boolean(slot.is_available),
+      preferred_work_block: getWorkBlockId(slot.preferred_work_block),
+    }
+  })
+
   answers.value = initialAnswers
+}
+
+function getWorkBlockId(workBlock) {
+  if (!workBlock) return ''
+
+  if (typeof workBlock === 'object') {
+    return workBlock.id || ''
+  }
+
+  return workBlock
 }
 
 function getAnswer(shiftId) {
@@ -79,7 +140,6 @@ function getAnswer(shiftId) {
     answers.value[shiftId] = {
       is_available: false,
       preferred_work_block: '',
-      comment: '',
     }
   }
 
@@ -87,6 +147,8 @@ function getAnswer(shiftId) {
 }
 
 function setAnswer(shiftId, value) {
+  if (!canEdit.value) return
+
   const answer = getAnswer(shiftId)
 
   answer.is_available = value
@@ -97,6 +159,8 @@ function setAnswer(shiftId, value) {
 }
 
 function setPreferredWorkBlock(shiftId, value) {
+  if (!canEdit.value) return
+
   const answer = getAnswer(shiftId)
 
   answer.preferred_work_block = value || ''
@@ -116,6 +180,18 @@ function getShiftTime(shift) {
   return `${formatTime(shift.starts_at)} — ${formatTime(shift.ends_at)}`
 }
 
+function getSelectedWorkBlockLabel(shiftId) {
+  const answer = getAnswer(shiftId)
+
+  if (!answer.preferred_work_block) return ''
+
+  const option = workBlockOptions.value.find((item) => {
+    return Number(item.value) === Number(answer.preferred_work_block)
+  })
+
+  return option?.label || ''
+}
+
 function formatTime(value) {
   if (!value) return ''
 
@@ -126,6 +202,27 @@ function formatDate(value) {
   if (!value) return '—'
 
   const date = new Date(`${value}T00:00:00`)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatDateShort(value) {
+  if (!value) return '—'
+
+  const date = new Date(`${value}T00:00:00`)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
 
   return new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit',
@@ -139,7 +236,9 @@ function formatDateTime(value) {
 
   const date = new Date(value)
 
-  if (Number.isNaN(date.getTime())) return value
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
 
   return new Intl.DateTimeFormat('ru-RU', {
     day: '2-digit',
@@ -154,50 +253,39 @@ async function submit() {
   message.value = ''
   error.value = ''
 
-  if (!activeForm.value || isSubmitted.value) return
+  if (!activeForm.value || !canEdit.value) return
 
   const result = await availabilityStore.submitForm(
     activeForm.value.id,
     preparedSlots.value,
   )
 
-  if (result.success) {
-    message.value = result.message || 'Ответ принят.'
-
-    availabilityStore.activeForm = {
-      ...availabilityStore.activeForm,
-      is_submitted: true,
-      submitted_at: new Date().toISOString(),
-    }
-
+  if (!result.success) {
+    error.value = result.message || 'Не удалось отправить форму.'
     return
   }
 
-  error.value = result.message || 'Не удалось отправить форму.'
+  message.value = isSubmitted.value
+    ? 'Изменения сохранены.'
+    : result.message || 'Ответ принят.'
+
+  const fetchResult = await availabilityStore.fetchActiveForm()
+
+  if (fetchResult.success && availabilityStore.activeForm) {
+    initAnswers()
+  }
 }
 </script>
 
 <template>
-  <div class="availability-page">
-    <div class="page-header">
-      <div>
-        <p class="page-kicker">
-          Доступность
-        </p>
-
-        <h1 class="page-title">
-          Моя доступность
-        </h1>
-
-        <p class="page-subtitle">
-          Здесь можно указать, в какие дни и смены вы готовы выйти на работу.
-        </p>
-      </div>
-    </div>
-
+  <div class="page-stack">
     <AppCard>
-      <div v-if="availabilityStore.isLoading" class="state-box">
-        <div class="state-icon">
+      <template #header>
+        Моя доступность
+      </template>
+
+      <div v-if="availabilityStore.isLoading && !hasActiveForm" class="empty-state">
+        <div class="empty-state__icon">
           ⏳
         </div>
 
@@ -208,44 +296,27 @@ async function submit() {
         </p>
       </div>
 
-      <div v-else-if="!hasActiveForm" class="state-box">
-        <div class="state-icon">
+      <div v-else-if="!hasActiveForm" class="empty-state">
+        <div class="empty-state__icon">
           📭
         </div>
 
         <h2>Открытой формы сейчас нет</h2>
 
         <p>
-          На данный момент форма доступности не опубликована или уже закрыта по дедлайну.
+          На данный момент форма доступности не опубликована.
           Когда командир откроет новую форму, она появится на этой странице.
         </p>
       </div>
 
-      <div v-else-if="isSubmitted" class="state-box state-box--success">
-        <div class="state-icon">
-          ✅
-        </div>
-
-        <h2>Форма доступности заполнена</h2>
-
-        <p>
-          Ваш ответ сохранен. Ожидайте публикации графика.
+      <div v-else class="page-stack">
+        <p class="page-description">
+          Здесь можно указать, в какие дни и смены вы готовы выйти на работу.
+          До дедлайна ответ можно изменить, после дедлайна он доступен только для просмотра.
         </p>
 
-        <div class="submitted-details">
-          <span v-if="activeForm?.submitted_at">
-            Отправлено: {{ formatDateTime(activeForm.submitted_at) }}
-          </span>
-
-          <span v-if="activeForm?.response_deadline">
-            Дедлайн формы: {{ formatDateTime(activeForm.response_deadline) }}
-          </span>
-        </div>
-      </div>
-
-      <div v-else class="availability-layout">
-        <div class="form-summary">
-          <div class="summary-main">
+        <div class="form-info">
+          <div>
             <h2>{{ activeForm.title }}</h2>
 
             <p v-if="activeForm.squad_name">
@@ -253,59 +324,106 @@ async function submit() {
             </p>
           </div>
 
-          <div class="summary-grid">
-            <div class="summary-item">
+          <div class="form-info__grid">
+            <div>
               <span>Период работы</span>
+
               <strong>
-                {{ formatDate(activeForm.period_start) }}
+                {{ formatDateShort(activeForm.period_start) }}
                 —
-                {{ formatDate(activeForm.period_end) }}
+                {{ formatDateShort(activeForm.period_end) }}
               </strong>
             </div>
 
-            <div class="summary-item summary-item--deadline">
+            <div>
               <span>Заполнить до</span>
+
               <strong>
                 {{ formatDateTime(activeForm.response_deadline) }}
               </strong>
             </div>
-          </div>
 
-          <div
-            v-if="canChooseWorkBlock"
-            class="work-block-hint"
-          >
-            Для выбранных смен можно указать желаемый блок работы.
+            <div>
+              <span>Статус ответа</span>
+
+              <strong>
+                {{ isSubmitted ? 'Ответ отправлен' : 'Ответ еще не отправлен' }}
+              </strong>
+            </div>
+
+            <div>
+              <span>Режим</span>
+
+              <strong>
+                {{ canEdit ? 'Можно редактировать' : 'Только просмотр' }}
+              </strong>
+            </div>
           </div>
         </div>
 
         <div
+          v-if="canChooseWorkBlock && canEdit"
+          class="notice"
+        >
+          Для выбранных смен можно указать желаемый блок работы.
+        </div>
+
+        <div
+          v-if="isReadonly && isSubmitted"
+          class="notice"
+        >
+          Ответ сохранён. Изменения недоступны, так как форма закрыта или срок заполнения истёк.
+        </div>
+
+        <div
           v-if="error"
-          class="inline-message inline-message--error"
+          class="notice notice--error"
         >
           {{ error }}
         </div>
 
         <div
           v-if="message"
-          class="inline-message inline-message--success"
+          class="notice notice--success"
         >
           {{ message }}
         </div>
 
-        <div class="days-list">
+        <div
+          v-if="isReadonly && !isSubmitted"
+          class="empty-state"
+        >
+          <div class="empty-state__icon">
+            ⏰
+          </div>
+
+          <h2>Форма больше недоступна для заполнения</h2>
+
+          <p>
+            Дедлайн уже прошёл или форма была закрыта командиром.
+            Дождитесь следующей формы доступности.
+          </p>
+        </div>
+
+        <form
+          v-else
+          class="page-stack"
+          @submit.prevent="submit"
+        >
+          <div
+            v-if="isSubmitted && canEdit"
+            class="notice"
+          >
+            Вы уже отправляли ответ. До дедлайна можно изменить выбранные смены
+            и сохранить обновлённый вариант.
+          </div>
+
           <section
             v-for="day in activeForm.days"
             :key="day.id"
             class="day-block"
           >
-            <header class="day-header">
-              <div>
-                <span class="day-label">День</span>
-
-                <h3>{{ formatDate(day.date) }}</h3>
-              </div>
-            </header>
+            <h3>{{ formatDate(day.date) }}</h3>
 
             <div class="shift-list">
               <article
@@ -318,367 +436,259 @@ async function submit() {
                   <input
                     type="checkbox"
                     :checked="getAnswer(shift.id).is_available"
+                    :disabled="isReadonly"
                     @change="setAnswer(shift.id, $event.target.checked)"
                   />
 
-                  <span class="shift-info">
-                    <span class="shift-title">
-                      {{ getShiftTitle(shift) }}
-                    </span>
+                  <span>
+                    <strong>{{ getShiftTitle(shift) }}</strong>
 
-                    <span
-                      v-if="getShiftTime(shift)"
-                      class="shift-time"
-                    >
+                    <small v-if="getShiftTime(shift)">
                       {{ getShiftTime(shift) }}
-                    </span>
+                    </small>
                   </span>
                 </label>
 
                 <div
-                  v-if="canChooseWorkBlock && getAnswer(shift.id).is_available"
+                  v-if="canChooseWorkBlock && getAnswer(shift.id).is_available && canEdit"
                   class="work-block-select"
                 >
-                  <span class="work-block-select__label">
-                    Желаемый блок работы
-                  </span>
-
                   <AppSelect
                     :model-value="getAnswer(shift.id).preferred_work_block || ''"
                     :options="workBlockOptions"
+                    :disabled="isReadonly"
                     placeholder="Выберите блок работы"
                     @update:model-value="setPreferredWorkBlock(shift.id, $event)"
                   />
                 </div>
+
+                <div
+                  v-if="isReadonly && getAnswer(shift.id).is_available && getSelectedWorkBlockLabel(shift.id)"
+                  class="shift-detail"
+                >
+                  Блок работы: {{ getSelectedWorkBlockLabel(shift.id) }}
+                </div>
               </article>
             </div>
           </section>
-        </div>
 
-        <div class="actions">
-          <AppButton
-            type="button"
-            variant="primary"
-            :loading="availabilityStore.isLoading"
-            @click="submit"
+          <div
+            v-if="canEdit"
+            class="actions"
           >
-            Отправить доступность
-          </AppButton>
-        </div>
+            <span class="selected-count">
+              Выбрано смен: <strong>{{ selectedCount }}</strong>
+            </span>
+
+            <AppButton
+              type="submit"
+              variant="primary"
+              :loading="availabilityStore.isLoading"
+              :disabled="availabilityStore.isLoading"
+            >
+              {{ isSubmitted ? 'Сохранить изменения' : 'Отправить доступность' }}
+            </AppButton>
+          </div>
+        </form>
       </div>
     </AppCard>
   </div>
 </template>
 
 <style scoped>
-.availability-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.page-kicker {
-  margin: 0 0 4px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.page-title {
-  margin: 0;
-  color: var(--text-color);
-  font-size: clamp(1.7rem, 4vw, 2.4rem);
-  line-height: 1.1;
-}
-
-.page-subtitle {
-  margin: 10px 0 0;
-  color: var(--text-muted);
-  max-width: 640px;
-  line-height: 1.5;
-}
-
-.availability-layout {
+.page-stack {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.state-box {
-  min-height: 320px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  text-align: center;
-  padding: 40px 20px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-}
-
-.state-box h2 {
-  margin: 0;
-  color: var(--text-color);
-  font-size: 1.35rem;
-}
-
-.state-box p {
+.page-description {
   margin: 0;
   color: var(--text-muted);
-  max-width: 560px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
-.state-box--success {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.08);
-}
-
-.state-icon {
-  width: 68px;
-  height: 68px;
-  border-radius: 22px;
+.empty-state {
+  min-height: 260px;
   display: grid;
   place-items: center;
-  font-size: 2rem;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.submitted-details {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  text-align: center;
+  padding: 32px 16px;
   color: var(--text-muted);
-  font-size: 0.95rem;
 }
 
-.form-summary {
+.empty-state h2,
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state h2 {
+  color: var(--text-color);
+}
+
+.empty-state__icon {
+  font-size: 2rem;
+}
+
+.form-info {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px;
-  border-radius: 22px;
-  background: linear-gradient(
-    135deg,
-    rgba(102, 126, 234, 0.12),
-    rgba(118, 75, 162, 0.08)
-  );
-  border: 1px solid rgba(102, 126, 234, 0.2);
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
 }
 
-.summary-main h2 {
+.form-info h2,
+.form-info p {
   margin: 0;
-  color: var(--text-color);
-  font-size: 1.35rem;
 }
 
-.summary-main p {
-  margin: 6px 0 0;
+.form-info p {
+  margin-top: 4px;
   color: var(--text-muted);
 }
 
-.summary-grid {
+.form-info__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-.summary-item {
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.summary-item span {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.summary-item strong {
-  display: block;
-  color: var(--text-color);
-  line-height: 1.35;
-}
-
-.summary-item--deadline {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.08);
-}
-
-.work-block-hint {
-  padding: 12px 14px;
-  border-radius: 14px;
-  color: var(--text-color);
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  font-size: 0.95rem;
-}
-
-.inline-message {
-  padding: 12px 14px;
-  border-radius: 14px;
-  font-weight: 600;
-}
-
-.inline-message--error {
-  color: #991b1b;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-.inline-message--success {
-  color: #166534;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.25);
-}
-
-.days-list {
+.form-info__grid div {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 4px;
+}
+
+.form-info__grid span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.form-info__grid strong {
+  color: var(--text-color);
+}
+
+.notice {
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: var(--text-color);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
+}
+
+.notice--error {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.notice--success {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.24);
 }
 
 .day-block {
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.day-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
 }
 
-.day-label {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.day-header h3 {
-  margin: 4px 0 0;
+.day-block h3 {
+  margin: 0;
   color: var(--text-color);
-  font-size: 1.1rem;
+  text-transform: capitalize;
 }
 
 .shift-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
 .shift-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.045);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease;
-}
-
-.shift-card:hover {
-  transform: translateY(-1px);
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
 }
 
 .shift-card--selected {
-  border-color: rgba(102, 126, 234, 0.45);
-  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--primary-color);
 }
 
 .shift-row {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
   color: var(--text-color);
   cursor: pointer;
 }
 
 .shift-row input {
-  width: 17px;
-  height: 17px;
-  margin-top: 4px;
-  flex-shrink: 0;
+  margin-top: 3px;
 }
 
-.shift-info {
+.shift-row span {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.shift-title {
-  font-weight: 700;
-}
-
-.shift-time {
+.shift-row small,
+.shift-detail,
+.selected-count {
   color: var(--text-muted);
-  font-size: 0.92rem;
 }
 
 .work-block-select {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
   max-width: 360px;
-  padding-left: 29px;
+  padding-left: 26px;
 }
 
-.work-block-select__label {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  font-weight: 600;
+.shift-detail {
+  padding-left: 26px;
+  font-size: 0.95rem;
 }
 
 .actions {
   display: flex;
-  justify-content: flex-start;
-  padding-top: 4px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
-@media (max-width: 768px) {
-  .summary-grid {
+@media (max-width: 900px) {
+  .form-info__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .form-info__grid {
     grid-template-columns: 1fr;
   }
 
-  .day-block {
-    padding: 14px;
-  }
-
-  .work-block-select {
-    max-width: 100%;
-    padding-left: 0;
-  }
-
   .actions {
-    justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .actions :deep(.btn) {
-    width: 100%;
+  .work-block-select,
+  .shift-detail {
+    max-width: none;
+    padding-left: 0;
   }
 }
 </style>
