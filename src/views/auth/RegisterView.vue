@@ -124,6 +124,43 @@
         </template>
       </AppCard>
     </Transition>
+    <ConfirmModal
+      ref="emailCodeModal"
+      :confirm-disabled="!canConfirmEmailCode"
+      :loading="authStore.isLoading"
+      loading-text="Проверка..."
+    >
+      <div class="email-confirmation">
+        <AppInput
+          v-model="emailCode"
+          label="Код подтверждения"
+          type="text"
+          placeholder="Введите код из письма"
+          icon="shield-check"
+          :error="emailCodeError"
+          hint="Код отправлен на указанную почту"
+        />
+
+        <AppAlert
+          v-if="emailCodeInfo"
+          variant="info"
+          class="mt-2"
+          dismissible
+          @close="emailCodeInfo = ''"
+        >
+          {{ emailCodeInfo }}
+        </AppAlert>
+
+        <button
+          type="button"
+          class="resend-code-button mt-2"
+          :disabled="authStore.isLoading"
+          @click="resendEmailCode"
+        >
+          Отправить код повторно
+        </button>
+      </div>
+    </ConfirmModal>
     <div class="footer-links text-center mt-4">
       <router-link to="/privacy" class="footer-link">Политика конфиденциальности</router-link>
       <span class="separator">•</span>
@@ -134,6 +171,7 @@
 </template>
 
 <script setup>
+import ConfirmModal from '@/components/ui/ConfirmModal.vue'
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -156,7 +194,71 @@ const passwordVisible = ref(false)
 const confPasswordVisible = ref(false)
 const errors = ref({})
 const errorMessage = ref('')
+const emailCodeModal = ref(null)
+const emailCode = ref('')
+const emailCodeError = ref('')
+const emailCodeInfo = ref('')
+const emailVerificationToken = ref(null)
 
+const canConfirmEmailCode = computed(() => {
+  return emailCode.value.trim().length >= 4
+})
+function buildUserData() {
+  return {
+    email: email.value,
+    password: password.value,
+    username: username.value,
+    last_name: last_name.value,
+    first_name: first_name.value,
+    middle_name: middle_name.value,
+    conf_password: conf_password.value,
+    email_code: emailCode.value.trim(),
+  }
+}
+async function resendEmailCode() {
+  emailCodeError.value = ''
+  emailCodeInfo.value = ''
+
+  const result = await authStore.sendRegistrationEmailCode(email.value)
+
+  if (result.success) {
+    emailCodeInfo.value = result.message || 'Код отправлен повторно'
+  } else {
+    emailCodeError.value = result.message || 'Не удалось отправить код повторно'
+  }
+}
+async function confirmEmailByCode() {
+  emailCode.value = ''
+  emailCodeError.value = ''
+  emailCodeInfo.value = 'Введите код подтверждения из письма'
+
+  while (true) {
+    const confirmed = await emailCodeModal.value.open({
+      title: 'Подтверждение почты',
+      message: `Мы отправили код на ${email.value}`,
+      confirmText: 'Зарегистрироваться',
+      cancelText: 'Отмена',
+    })
+
+    if (!confirmed) {
+      return false
+    }
+
+    if (!emailCode.value.trim()) {
+      emailCodeError.value = 'Введите код подтверждения'
+      continue
+    }
+
+    const result = await authStore.register(buildUserData())
+
+    if (result.success) {
+      router.push({ name: 'login' })
+      return true
+    }
+
+    emailCodeError.value = result.message || 'Ошибка регистрации'
+  }
+}
 async function handleSubmit() {
   errors.value = {}
   errorMessage.value = ''
@@ -186,12 +288,14 @@ async function handleSubmit() {
     middle_name: middle_name.value,
     conf_password: conf_password.value,
   }
-  const result = await authStore.register(UserData)
-  if (result.success) {
-    router.push({ name: 'login' })
-  } else {
-    errorMessage.value = result.message || 'Ошибка регистрации'
+  const sendCodeResult = await authStore.sendRegistrationEmailCode(email.value)
+
+  if (!sendCodeResult.success) {
+    errorMessage.value = sendCodeResult.message || 'Не удалось отправить код подтверждения'
+    return
   }
+
+  await confirmEmailByCode()
 }
 </script>
 
@@ -287,5 +391,27 @@ async function handleSubmit() {
 }
 .login-link:hover {
   text-decoration: underline;
+}
+.email-confirmation {
+  margin-top: 0.75rem;
+}
+
+.resend-code-button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 0;
+  cursor: pointer;
+}
+
+.resend-code-button:hover {
+  color: var(--text-color);
+  text-decoration: underline;
+}
+
+.resend-code-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

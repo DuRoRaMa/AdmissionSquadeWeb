@@ -42,6 +42,7 @@ const form = reactive({
   period_start: '',
   period_end: '',
   response_deadline: '',
+  allow_work_block_choice: false,
   days: [],
 })
 
@@ -123,6 +124,7 @@ function submit() {
     period_start: form.period_start,
     period_end: form.period_end,
     response_deadline: form.response_deadline || null,
+    allow_work_block_choice: form.allow_work_block_choice,
     days: validDays.map((day) => ({
       date: day.date,
       shifts: buildDayShifts(day),
@@ -173,6 +175,7 @@ function resetForm() {
   form.period_start = ''
   form.period_end = ''
   form.response_deadline = ''
+  form.allow_work_block_choice = false
   form.days = []
 }
 </script>
@@ -211,6 +214,14 @@ function resetForm() {
           type="datetime-local"
         />
       </div>
+
+      <label class="availability-create-form__checkbox">
+        <input
+          v-model="form.allow_work_block_choice"
+          type="checkbox"
+        />
+        <span>Разрешить участникам выбирать блок работы</span>
+      </label>
 
       <div class="availability-create-form__grid availability-create-form__grid--period">
         <AppInput
@@ -282,6 +293,28 @@ function resetForm() {
 
 .availability-create-form__field span {
   color: var(--input-error-color, #dc3545);
+}
+
+.availability-create-form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: var(--availability-control-height);
+  color: var(--text-color);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.availability-create-form__checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-color, #0d6efd);
+  cursor: pointer;
+}
+
+.availability-create-form__checkbox span {
+  line-height: 1.3;
 }
 
 .availability-create-form__error {

@@ -97,6 +97,79 @@ export const useAuthStore = defineStore('auth', () => {
     const userStore = useUserStore()
     userStore.clearUser()
   }
+  function getApiErrorMessage(error, fallbackMessage = 'Произошла ошибка') {
+    const data = error.response?.data
+
+    if (!data) {
+      return error.message || fallbackMessage
+    }
+
+    if (typeof data === 'string') {
+      return data
+    }
+
+    if (data.detail) {
+      return data.detail
+    }
+
+    if (data.message) {
+      return data.message
+    }
+
+    if (data.error) {
+      return data.error
+    }
+
+    if (data.non_field_errors) {
+      if (Array.isArray(data.non_field_errors)) {
+        return data.non_field_errors.join(' ')
+      }
+
+      return String(data.non_field_errors)
+    }
+
+    if (typeof data === 'object') {
+      const messages = []
+
+      Object.entries(data).forEach(([field, value]) => {
+        if (Array.isArray(value)) {
+          messages.push(value.join(' '))
+        } else if (typeof value === 'string') {
+          messages.push(value)
+        } else if (value && typeof value === 'object') {
+          messages.push(JSON.stringify(value))
+        }
+      })
+
+      if (messages.length) {
+        return messages.join(' ')
+      }
+    }
+
+    return fallbackMessage
+  }
+
+  async function sendRegistrationEmailCode(email) {
+    isLoading.value = true
+
+    try {
+      const response = await apiClient.post('api/v1/notifications/registration-code/', {
+        email,
+      })
+
+      return {
+        success: true,
+        message: response.data.message || 'Код подтверждения отправлен на почту',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getApiErrorMessage(error, 'Не удалось отправить код подтверждения'),
+      }
+    } finally {
+      isLoading.value = false
+    }
+  }
 
   async function register(userData) {
     isLoading.value = true
@@ -108,29 +181,59 @@ export const useAuthStore = defineStore('auth', () => {
         user: response.data.data,
       }
     } catch (error) {
-      const message =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        'Ошибка регистрации'
-
-      return { success: false, message }
+      return {
+        success: false,
+        message: getApiErrorMessage(error, 'Ошибка регистрации'),
+      }
     } finally {
       isLoading.value = false
     }
   }
 
-  async function forgotPassword() {
-    return {
-      success: false,
-      message: 'Функция восстановления пароля пока не реализована',
+  async function forgotPassword(email) {
+    isLoading.value = true
+
+    try {
+      const response = await apiClient.post('api/v1/users/password-reset/', {
+        email,
+      })
+
+      return {
+        success: true,
+        message:
+          response.data.message ||
+          'Если пользователь с такой почтой существует, ссылка отправлена.',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getApiErrorMessage(error, 'Не удалось отправить ссылку восстановления'),
+      }
+    } finally {
+      isLoading.value = false
     }
   }
 
-  async function resetPassword() {
-    return {
-      success: false,
-      message: 'Функция сброса пароля пока не реализована',
+  async function resetPassword(data) {
+    isLoading.value = true
+
+    try {
+      const response = await apiClient.post(
+        'api/v1/users/password-reset/confirm/',
+        data
+      )
+
+      return {
+        success: true,
+        message: response.data.message || 'Пароль успешно изменен.',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: getApiErrorMessage(error, 'Не удалось изменить пароль'),
+      }
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -146,6 +249,7 @@ export const useAuthStore = defineStore('auth', () => {
     forgotPassword,
     resetPassword,
     setToken,
+    sendRegistrationEmailCode,
   }
 })
 
