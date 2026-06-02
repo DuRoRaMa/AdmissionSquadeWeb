@@ -50,6 +50,40 @@ const requestedFullName = computed(() => {
   )
 })
 
+const targetMembershipFullName = computed(() => {
+  const targetMembership = props.request.target_membership
+
+  const nestedUser = targetMembership?.user
+
+  const fullNameFromNestedUser = [
+    nestedUser?.last_name,
+    nestedUser?.first_name,
+    nestedUser?.middle_name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const fullNameFromTarget = [
+    targetMembership?.last_name,
+    targetMembership?.first_name,
+    targetMembership?.middle_name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    props.request.target_membership_full_name ||
+    props.request.target_full_name ||
+    props.request.replacement_full_name ||
+    targetMembership?.full_name ||
+    fullNameFromNestedUser ||
+    fullNameFromTarget ||
+    targetMembership?.email ||
+    nestedUser?.email ||
+    ''
+  )
+})
+const isSwapRequest = computed(() => props.request.request_type === 'swap')
 const requestTypeLabel = computed(() => {
   return requestTypeLabels[props.request.request_type] || props.request.request_type || 'Заявка'
 })
@@ -149,7 +183,16 @@ async function rejectRequest() {
         <span class="admin-request-card__label">Тип заявки</span>
         <span>{{ requestTypeLabel }}</span>
       </div>
+      <div
+        v-if="isSwapRequest"
+        class="admin-request-card__line"
+      >
+        <span class="admin-request-card__label">Замена в графике</span>
 
+        <span>
+          {{ targetMembershipFullName || 'Участник на замену не передан с сервера' }}
+        </span>
+      </div>
       <div class="admin-request-card__line">
         <span class="admin-request-card__label">Причина</span>
         <span>{{ request.reason || 'Причина не указана' }}</span>

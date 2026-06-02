@@ -138,12 +138,15 @@ function goToManage() {
 
 <style scoped>
 .squad-card {
+  height: 100%;
   background: var(--card-bg);
   backdrop-filter: blur(var(--card-blur));
   border-radius: var(--card-border-radius);
   border: 1px solid var(--card-border);
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
 .squad-card:hover {
@@ -173,6 +176,7 @@ function goToManage() {
 }
 
 .card-body {
+  flex: 1;
   padding: 1rem;
 }
 
@@ -195,6 +199,7 @@ function goToManage() {
   background: var(--header-footer-bg);
   border-top: 1px solid var(--card-border);
   text-align: right;
+  margin-top: auto;
 }
 
 .btn-join,

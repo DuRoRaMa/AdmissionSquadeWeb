@@ -53,6 +53,7 @@ function formatDate(value) {
   if (!value) return '—'
 
   const date = new Date(value)
+
   if (Number.isNaN(date.getTime())) return '—'
 
   return new Intl.DateTimeFormat('ru-RU').format(date)
@@ -91,6 +92,7 @@ function isDownloading(form) {
             <th>Дедлайн</th>
             <th>Статус</th>
             <th>Смен</th>
+            <th>Выбор блока</th>
             <th>Управление</th>
             <th class="availability-forms-table__actions-heading">Ответы</th>
           </tr>
@@ -114,6 +116,17 @@ function isDownloading(form) {
             </td>
 
             <td>{{ getShiftsCount(form) }}</td>
+
+            <td>
+              <span
+                class="availability-forms-table__choice-pill"
+                :class="{
+                  'availability-forms-table__choice-pill--enabled': form.allow_work_block_choice,
+                }"
+              >
+                {{ form.allow_work_block_choice ? 'Разрешён' : 'Не используется' }}
+              </span>
+            </td>
 
             <td>
               <div class="availability-forms-table__manage-actions">
@@ -210,5 +223,23 @@ function isDownloading(form) {
   font-size: 0.85rem;
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
+}
+
+.availability-forms-table__choice-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.availability-forms-table__choice-pill--enabled {
+  color: #75d19b;
+  background: rgba(25, 135, 84, 0.14);
 }
 </style>

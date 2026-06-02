@@ -148,7 +148,7 @@ function canPublishSchedule(item) {
 }
 
 function canEditSchedule(item) {
-  return isScheduleGenerated(item)
+  return isScheduleGenerated(item) && ['draft', 'published'].includes(item.status)
 }
 
 function canDownloadSchedule(item) {

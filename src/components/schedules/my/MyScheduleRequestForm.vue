@@ -1,9 +1,10 @@
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import AppButton from '@/components/ui/AppButton.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import ConfirmModal from '@/components/ui/ConfirmModal.vue'
+import { useScheduleStore } from '@/stores/schedule'
 
 const props = defineProps({
   entryId: {
@@ -15,12 +16,17 @@ const props = defineProps({
 
 const emit = defineEmits(['submit-request', 'validation-error'])
 
+const scheduleStore = useScheduleStore()
+
 const confirmModal = ref(null)
 const reasonField = ref(null)
 
 const requestType = ref('cancel')
 const reason = ref('')
+const targetMembership = ref('')
+
 const isReasonInvalid = ref(false)
+const isTargetInvalid = ref(false)
 
 const requestTypeOptions = [
   {
@@ -33,6 +39,48 @@ const requestTypeOptions = [
   },
 ]
 
+const replacementCandidates = computed(() => {
+  return scheduleStore.replacementCandidatesByEntry?.[props.entryId] || []
+})
+
+const replacementCandidateOptions = computed(() => {
+  return replacementCandidates.value.map((item) => ({
+    value: item.id,
+    label: item.full_name || item.name || item.email || `Участник ${item.id}`,
+  }))
+})
+
+const isCandidatesLoading = computed(() => {
+  return String(scheduleStore.replacementCandidatesLoadingEntryId) === String(props.entryId)
+})
+
+const isSubmitDisabled = computed(() => {
+  if (props.loading || isCandidatesLoading.value) {
+    return true
+  }
+
+  if (requestType.value === 'swap' && !replacementCandidateOptions.value.length) {
+    return true
+  }
+
+  return false
+})
+
+watch(requestType, async (value) => {
+  targetMembership.value = ''
+  isTargetInvalid.value = false
+
+  if (value !== 'swap') {
+    return
+  }
+
+  const result = await scheduleStore.fetchReplacementCandidates(props.entryId)
+
+  if (!result.success) {
+    emit('validation-error', result.message)
+  }
+})
+
 function getRequestTypeLabel(value) {
   return requestTypeOptions.find((option) => option.value === value)?.label || 'Заявка'
 }
@@ -43,14 +91,23 @@ function clearReasonError() {
   }
 }
 
+function clearTargetError() {
+  if (targetMembership.value) {
+    isTargetInvalid.value = false
+  }
+}
+
 async function markReasonAsInvalid() {
   isReasonInvalid.value = true
-
   emit('validation-error', 'Перед отправкой заявки нужно указать причину.')
 
   await nextTick()
-
   reasonField.value?.focus()
+}
+
+function markTargetAsInvalid() {
+  isTargetInvalid.value = true
+  emit('validation-error', 'Для заявки на замену нужно выбрать участника.')
 }
 
 async function submitRequest() {
@@ -59,7 +116,13 @@ async function submitRequest() {
     return
   }
 
+  if (requestType.value === 'swap' && !targetMembership.value) {
+    markTargetAsInvalid()
+    return
+  }
+
   isReasonInvalid.value = false
+  isTargetInvalid.value = false
 
   const isConfirmed = await confirmModal.value.open({
     title: 'Подтверждение отправки',
@@ -70,15 +133,23 @@ async function submitRequest() {
     return
   }
 
-  emit('submit-request', {
+  const payload = {
     entry: props.entryId,
     request_type: requestType.value,
     reason: reason.value.trim(),
-  })
+  }
+
+  if (requestType.value === 'swap') {
+    payload.target_membership = targetMembership.value
+  }
+
+  emit('submit-request', payload)
 
   reason.value = ''
   requestType.value = 'cancel'
+  targetMembership.value = ''
   isReasonInvalid.value = false
+  isTargetInvalid.value = false
 }
 </script>
 
@@ -95,9 +166,42 @@ async function submitRequest() {
       class="request-form__select"
     />
 
-    <div v-if="requestType === 'swap'" class="request-form__hint">
-      Участника на замену выберем после правок бэка.
-    </div>
+    <template v-if="requestType === 'swap'">
+      <div v-if="isCandidatesLoading" class="request-form__hint">
+        Загружаем участников на замену...
+      </div>
+
+      <template v-else>
+        <AppSelect
+          v-model="targetMembership"
+          :options="replacementCandidateOptions"
+          placeholder="Кто выйдет вместо вас"
+          class="request-form__select"
+          @update:model-value="clearTargetError"
+        />
+
+        <div
+          v-if="isTargetInvalid"
+          class="request-form__field-error"
+        >
+          Выберите участника на замену
+        </div>
+
+        <div
+          v-else-if="!replacementCandidateOptions.length"
+          class="request-form__hint"
+        >
+          Нет доступных участников для замены.
+        </div>
+
+        <div
+          v-else
+          class="request-form__hint"
+        >
+          Выберите участника, который сможет выйти вместо вас.
+        </div>
+      </template>
+    </template>
 
     <div class="request-form__field">
       <textarea
@@ -112,7 +216,10 @@ async function submitRequest() {
         @input="clearReasonError"
       ></textarea>
 
-      <div v-if="isReasonInvalid" class="request-form__field-error">
+      <div
+        v-if="isReasonInvalid"
+        class="request-form__field-error"
+      >
         Заполните причину заявки
       </div>
     </div>
@@ -121,7 +228,7 @@ async function submitRequest() {
       type="submit"
       variant="primary"
       :loading="loading"
-      :disabled="loading"
+      :disabled="isSubmitDisabled"
     >
       Отправить
     </AppButton>
@@ -147,12 +254,6 @@ async function submitRequest() {
   width: 100%;
 }
 
-.request-form__hint {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
 .request-form__field {
   display: flex;
   flex-direction: column;
@@ -169,10 +270,6 @@ async function submitRequest() {
   padding: 10px 12px;
   resize: vertical;
   outline: none;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
 }
 
 .request-form__textarea::placeholder {
@@ -185,14 +282,18 @@ async function submitRequest() {
 
 .request-form__textarea--invalid {
   border-color: var(--danger-color, #dc3545);
-  background: color-mix(in srgb, var(--danger-color, #dc3545) 12%, var(--header-footer-bg));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger-color, #dc3545) 22%, transparent);
 }
 
 .request-form__field-error {
   color: var(--danger-color, #dc3545);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.request-form__hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 :deep(.custom-select) {

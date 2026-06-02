@@ -214,12 +214,12 @@ onMounted(async () => {
   margin: 0;
   font-size: 1.75rem;
   font-weight: 800;
-  color: var(--text-main, #1f2937);
+  color: var(--text-main);
 }
 
 .page-subtitle {
   margin: 8px 0 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-size: 1rem;
 }
 
@@ -228,15 +228,15 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   text-decoration: none;
-  color: var(--brand-700, #1d4ed8);
+  color: var(--brand-700);
   font-weight: 600;
 }
 
 .tabs-card,
 .state-card,
 .tab-panel {
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--card-border, #e5e7eb);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
@@ -251,7 +251,7 @@ onMounted(async () => {
 .tab-button {
   border: none;
   background: transparent;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   padding: 10px 14px;
   border-radius: 12px;
   font: inherit;
@@ -262,11 +262,11 @@ onMounted(async () => {
 
 .tab-button:hover {
   background: rgba(37, 99, 235, 0.08);
-  color: var(--brand-700, #1d4ed8);
+  color: var(--brand-700);
 }
 
 .tab-button.is-active {
-  background: var(--brand-600, #2563eb);
+  background: var(--brand-600);
   color: #fff;
 }
 
@@ -288,11 +288,11 @@ onMounted(async () => {
 .state-title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--text-main, #1f2937);
+  color: var(--text-main);
 }
 
 .state-text {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .btn {
@@ -305,7 +305,7 @@ onMounted(async () => {
 }
 
 .btn-primary {
-  background: var(--brand-600, #2563eb);
+  background: var(--brand-600);
   color: #fff;
 }
 

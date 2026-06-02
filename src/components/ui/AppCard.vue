@@ -20,6 +20,7 @@
   box-shadow: var(--card-shadow);
   border: var(--card-border);
   overflow: hidden;
+  width: 100%;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .card-header {

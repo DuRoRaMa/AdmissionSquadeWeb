@@ -384,22 +384,24 @@ onMounted(bootstrap)
   display: grid;
   gap: 18px;
 }
+
 .readonly-pill {
   display: inline-flex;
   align-items: center;
   padding: 0.42rem 0.72rem;
   border-radius: 999px;
-  background: rgba(79, 70, 229, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.18);
-  color: var(--text-main, #1f2937);
+  background: color-mix(in srgb, var(--primary-color, #4f46e5) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color, #4f46e5) 26%, transparent);
+  color: var(--text-color);
   font-size: 0.85rem;
   font-weight: 600;
 }
 
 .readonly-text {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
+
 .members-header {
   display: flex;
   align-items: flex-start;
@@ -409,14 +411,14 @@ onMounted(bootstrap)
 
 .members-title {
   margin: 0;
+  color: var(--text-color);
   font-size: 1.25rem;
   font-weight: 800;
-  color: var(--text-main, #1f2937);
 }
 
 .members-subtitle {
   margin: 8px 0 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -424,10 +426,10 @@ onMounted(bootstrap)
 .alert,
 .state-card,
 .table-card {
-  background: var(--card-bg, #ffffff);
-  border: 1px solid var(--card-border, #e5e7eb);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--card-shadow, 0 10px 30px rgba(15, 23, 42, 0.05));
 }
 
 .notice-card,
@@ -437,24 +439,25 @@ onMounted(bootstrap)
 }
 
 .notice-card {
-  background: #f8fafc;
-  color: #475569;
+  background: color-mix(in srgb, var(--primary-color, #4f46e5) 8%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 20%, var(--card-border));
+  color: var(--text-color);
 }
 
 .alert-error {
-  background: #fff5f5;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--danger-color, #dc3545) 12%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--danger-color, #dc3545) 34%, var(--card-border));
+  color: var(--danger-color, #dc3545);
 }
 
 .alert-success {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #15803d;
+  background: color-mix(in srgb, var(--success-color, #198754) 12%, var(--card-bg));
+  border-color: color-mix(in srgb, var(--success-color, #198754) 34%, var(--card-border));
+  color: var(--success-color, #198754);
 }
 
 .state-card {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .table-card {
@@ -468,24 +471,38 @@ onMounted(bootstrap)
 
 .members-table {
   width: 100%;
-  border-collapse: collapse;
   min-width: 860px;
+  border-collapse: collapse;
+  color: var(--text-color);
 }
 
 .members-table th,
 .members-table td {
   padding: 14px 16px;
   text-align: left;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1px solid var(--card-border);
   vertical-align: top;
 }
 
 .members-table th {
+  background: var(--header-footer-bg);
+  color: var(--text-muted);
   font-size: 0.85rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
-  background: #f8fafc;
+}
+
+.members-table td {
+  background: transparent;
+}
+
+.members-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.members-table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary-color, #4f46e5) 6%, transparent);
 }
 
 .member-main {
@@ -494,13 +511,13 @@ onMounted(bootstrap)
 }
 
 .member-name {
+  color: var(--text-color);
   font-weight: 700;
-  color: #1f2937;
 }
 
 .member-meta {
+  color: var(--text-muted);
   font-size: 0.85rem;
-  color: #64748b;
 }
 
 .role-cell {
@@ -510,16 +527,32 @@ onMounted(bootstrap)
 }
 
 .role-hint {
+  color: var(--text-muted);
   font-size: 0.85rem;
-  color: #64748b;
 }
 
 .ticket-input {
   width: 160px;
-  border: 1px solid #dbe4f0;
+  border: 1px solid var(--card-border);
   border-radius: 12px;
+  background: var(--header-footer-bg);
+  color: var(--text-color);
   padding: 10px 12px;
   font: inherit;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.ticket-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ticket-input:focus {
+  border-color: var(--primary-color, #4f46e5);
+  box-shadow: var(--input-focus-shadow, 0 0 0 3px rgba(79, 70, 229, 0.18));
 }
 
 .btn {
@@ -527,7 +560,17 @@ onMounted(bootstrap)
   border-radius: 999px;
   padding: 10px 16px;
   font: inherit;
+  font-weight: 700;
   cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
@@ -536,16 +579,23 @@ onMounted(bootstrap)
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  background: var(--primary-gradient, linear-gradient(135deg, #4f46e5, #2563eb));
   color: #ffffff;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--primary-color, #4f46e5) 24%, transparent);
 }
 
 .btn-danger {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--danger-color, #dc3545) 14%, var(--card-bg));
+  color: var(--danger-color, #dc3545);
+  border: 1px solid color-mix(in srgb, var(--danger-color, #dc3545) 30%, transparent);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger-color, #dc3545) 20%, var(--card-bg));
 }
 
 .btn-small {
   padding: 8px 12px;
+  font-size: 0.9rem;
 }
 </style>

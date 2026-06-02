@@ -5,6 +5,8 @@ import { APP_SECTIONS, filterSectionItems } from '@/router/sections'
 import useAuthStore from '@/stores/auth'
 import useUserStore from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
+import NotificationsDropdown from '@/components/notifications/NotificationsDropdown.vue'
+import { useNotificationStore } from '@/stores/notifications'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +14,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const notificationStore = useNotificationStore()
 
 const mobileMenuOpen = ref(false)
 
@@ -105,6 +108,7 @@ function isActive(link) {
 }
 
 function handleLogout() {
+  notificationStore.reset()
   authStore.logout()
   mobileMenuOpen.value = false
   router.push({ name: 'login' })
@@ -165,6 +169,11 @@ watch(
 
         <div class="app-topbar__actions">
           <template v-if="authStore.isAuthenticated">
+            <NotificationsDropdown />
+            <button class="app-icon-btn" @click="themeStore.toggleTheme" type="button">
+              <i :class="themeStore.isDark ? 'bi bi-sun' : 'bi bi-moon'" />
+            </button>
+
             <RouterLink
               to="/profile"
               class="app-topbar__user"
@@ -172,10 +181,6 @@ watch(
             >
               {{ displayName }}
             </RouterLink>
-
-            <button class="app-icon-btn" @click="themeStore.toggleTheme" type="button">
-              <i :class="themeStore.isDark ? 'bi bi-sun' : 'bi bi-moon'" />
-            </button>
 
             <button class="app-ghost-btn" @click="handleLogout" type="button">
               Выйти
@@ -450,6 +455,15 @@ watch(
   .app-topbar__user,
   .app-ghost-btn,
   .app-secondary-btn {
+    width: 100%;
+  }
+}
+@media (max-width: 576px) {
+  :deep(.notifications-dropdown) {
+    width: 100%;
+  }
+
+  :deep(.notifications-dropdown__trigger) {
     width: 100%;
   }
 }
