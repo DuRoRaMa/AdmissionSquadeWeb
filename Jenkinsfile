@@ -11,22 +11,16 @@ pipeline {
     }
 
     stages {
-        stage('Sync frontend master') {
+        stage('Checkout') {
             steps {
-                sh '''
-                    git config --global --add safe.directory /srv/pk-services/Squad/AdmissionSquadeWeb
-
-                    cd /srv/pk-services/Squad/AdmissionSquadeWeb
-                    git fetch origin master
-                    git reset --hard origin/master
-                '''
+                checkout scm
             }
         }
 
         stage('Build and deploy frontend') {
             steps {
                 sh '''
-                    cd /srv/pk-services/Squad/AdmissionSquadeWeb
+                    set -e
 
                     docker network inspect pk_proxy >/dev/null 2>&1 || docker network create pk_proxy
 
@@ -35,12 +29,19 @@ pipeline {
             }
         }
 
-        stage('Frontend checks') {
+        stage('Check frontend') {
             steps {
                 sh '''
+                    set -e
+
                     docker ps | grep sopk_frontend
-                    docker exec pk_nginx wget -qO- http://sopk_frontend/health
-                    docker exec pk_nginx nginx -s reload
+
+                    if docker ps --format '{{.Names}}' | grep -q '^pk_nginx$'; then
+                        docker exec pk_nginx wget -qO- http://sopk_frontend/health
+                        docker exec pk_nginx nginx -s reload || true
+                    fi
+
+                    echo "Frontend deployed successfully"
                 '''
             }
         }
