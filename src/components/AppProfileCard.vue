@@ -40,7 +40,7 @@ const userRole = computed(() => {
 
 <style scoped>
 .profile-sidebar {
-  flex: 0 0 280px;
+  flex: auto;
   background: var(--card-bg);
   backdrop-filter: blur(var(--card-blur));
   border-radius: 28px;
@@ -48,6 +48,7 @@ const userRole = computed(() => {
   border: 1px solid var(--card-border);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   display: flex;
+  justify-content: center;
   flex-direction: column;
   gap: 24px;
   transition: all 0.2s ease;

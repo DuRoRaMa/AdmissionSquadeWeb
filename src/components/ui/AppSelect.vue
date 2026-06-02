@@ -6,7 +6,13 @@
     </div>
     <Teleport to="body">
       <Transition name="dropdown">
-        <ul v-show="isOpen" class="dropdown-list" :style="dropdownStyle">
+        <ul
+          v-show="isOpen"
+          ref="dropdownRef"
+          class="dropdown-list"
+          :style="dropdownStyle"
+          @click.stop
+        >
           <li
             v-for="option in options"
             :key="option.value"
@@ -37,6 +43,7 @@ const isOpen = ref(false)
 const selectRef = ref(null)
 const triggerRef = ref(null)
 const dropdownStyle = ref({})
+const dropdownRef = ref(null)
 
 const selectedLabel = computed(() => {
   const selected = props.options.find(opt => opt.value === props.modelValue)
@@ -73,36 +80,47 @@ function selectOption(option) {
 }
 
 function closeDropdown(e) {
-  if (!selectRef.value?.contains(e.target)) {
-    isOpen.value = false
+  const target = e.target
+
+  if (
+    selectRef.value?.contains(target) ||
+    dropdownRef.value?.contains(target)
+  ) {
+    return
   }
+
+  isOpen.value = false
 }
 
-function handleScrollResize() {
-  if (isOpen.value) {
-    isOpen.value = false
-  }
+async function handleScroll() {
+  if (!isOpen.value) return
+  await updateDropdownPosition()
+}
+
+function handleResize() {
+  if (!isOpen.value) return
+  isOpen.value = false
 }
 
 onMounted(() => {
   document.addEventListener('click', closeDropdown)
-  window.addEventListener('scroll', handleScrollResize, true)
-  window.addEventListener('resize', handleScrollResize)
+  window.addEventListener('scroll', handleScroll, true)
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeDropdown)
-  window.removeEventListener('scroll', handleScrollResize, true)
-  window.removeEventListener('resize', handleScrollResize)
+  window.removeEventListener('scroll', handleScroll, true)
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
 <style scoped>
 .custom-select {
   position: relative;
-  display: inline-block;
+  display: block;
   width: 100%;
-  max-width: 240px;
+  max-width: none;
   font-size: 0.85rem;
 }
 

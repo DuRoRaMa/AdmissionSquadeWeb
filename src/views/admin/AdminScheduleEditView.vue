@@ -133,7 +133,7 @@ const alert = ref({
 })
 
 const scheduleId = computed(() => route.params.id)
-const isReadonly = computed(() => schedule.value?.status === 'published' || schedule.value?.status === 'archived')
+const isReadonly = computed(() => schedule.value?.status === 'archived')
 const canPublish = computed(() => schedule.value?.status === 'draft')
 
 const isNeedsDirty = computed(() => (
@@ -148,7 +148,7 @@ const isDirty = computed(() => isNeedsDirty.value || isAssignmentsDirty.value)
 
 const assignmentsReadonlyMessage = computed(() => {
   if (isReadonly.value) {
-    return 'Опубликованный или архивный график доступен только для просмотра.'
+    return 'Архивный график доступен только для просмотра.'
   }
 
   if (isNeedsDirty.value) {
@@ -835,7 +835,7 @@ function buildNeedsPayload() {
 
 async function handleSaveNeeds() {
   if (isReadonly.value) {
-    showAlert('warning', 'Опубликованный или архивный график нельзя редактировать')
+    showAlert('warning', 'Архивный график нельзя редактировать')
     return
   }
 
@@ -923,7 +923,7 @@ function buildAssignmentsPayload() {
 
 async function handleSaveAssignments() {
   if (isReadonly.value) {
-    showAlert('warning', 'Опубликованный или архивный график нельзя редактировать')
+    showAlert('warning', 'Архивный график нельзя редактировать')
     return
   }
 

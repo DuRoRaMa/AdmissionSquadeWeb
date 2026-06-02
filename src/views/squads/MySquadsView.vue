@@ -29,9 +29,11 @@
             </ul>
           </div>
         </div>
+        <!--
         <div class="card-footer">
           <button class="btn-leave" @click="openExitModal">Подать заявку на выход</button>
         </div>
+        -->
       </div>
     </div>
 

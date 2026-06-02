@@ -73,12 +73,17 @@ function handleUserUpdate(updatedUser) {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(320px, 420px);
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .profile-top__main,
 .profile-top__qr {
   min-width: 0;
+  display: flex;
+}
+
+.profile-top__main > :deep(*) {
+  width: 100%;
 }
 
 .profile-grid {
