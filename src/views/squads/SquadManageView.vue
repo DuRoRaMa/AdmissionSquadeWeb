@@ -73,7 +73,7 @@ async function fetchSquad() {
   errorMessage.value = ''
 
   try {
-    const response = await apiClient.get(`/api/v1/squads/${squadIdNumber.value}/`)
+    const response = await apiClient.get(`/squads/${squadIdNumber.value}/`)
     squad.value = response.data
   } catch (error) {
     console.error(error)

@@ -14,7 +14,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/forms/active/')
+      const response = await apiClient.get('/rosters/forms/active/')
       activeForm.value = response.data
 
       return { success: true, data: response.data }
@@ -34,7 +34,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/forms/${formId}/submit/`, { slots })
+      const response = await apiClient.post(`/rosters/forms/${formId}/submit/`, { slots })
 
       return {
         success: true,
@@ -54,7 +54,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/forms/')
+      const response = await apiClient.get('/rosters/forms/')
       forms.value = normalizeListResponse(response.data)
 
       return { success: true, data: forms.value }
@@ -74,7 +74,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('/api/v1/rosters/forms/', payload)
+      const response = await apiClient.post('/rosters/forms/', payload)
 
       return {
         success: true,
@@ -93,7 +93,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
 
   async function openForm(formId) {
     try {
-      const response = await apiClient.post(`/api/v1/rosters/forms/${formId}/open/`)
+      const response = await apiClient.post(`/rosters/forms/${formId}/open/`)
 
       return {
         success: true,
@@ -109,7 +109,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
 
   async function closeForm(formId) {
     try {
-      const response = await apiClient.post(`/api/v1/rosters/forms/${formId}/close/`)
+      const response = await apiClient.post(`/rosters/forms/${formId}/close/`)
 
       return {
         success: true,
@@ -127,7 +127,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     isResponsesLoading.value = true
 
     try {
-      const response = await apiClient.get(`/api/v1/rosters/forms/${formId}/responses/`)
+      const response = await apiClient.get(`/rosters/forms/${formId}/responses/`)
       responses.value = normalizeResponsesResponse(response.data)
 
       return { success: true, data: responses.value }
@@ -148,7 +148,7 @@ export const useAvailabilityStore = defineStore('availability', () => {
     const fallbackName = buildFallbackExportName(form)
 
     try {
-      const response = await apiClient.get(`/api/v1/rosters/forms/${formId}/responses/export/`, {
+      const response = await apiClient.get(`/rosters/forms/${formId}/responses/export/`, {
         responseType: 'blob',
       })
 

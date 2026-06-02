@@ -105,7 +105,7 @@ async function saveChanges() {
   errorMessage.value = ''
   try {
     const method = props.user.passport ? 'patch' : 'post'
-    const response = await apiClient[method]('/api/v1/users/me/passport/', editable.value)
+    const response = await apiClient[method]('/users/me/passport/', editable.value)
     const updatedUser = { ...props.user, passport: response.data }
     emit('update:user', updatedUser)
     isEditing.value = false

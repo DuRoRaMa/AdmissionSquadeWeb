@@ -66,7 +66,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     lastError.value = ''
 
     try {
-      const response = await apiClient.get('/api/v1/notifications/', {
+      const response = await apiClient.get('/notifications/', {
         params,
       })
 
@@ -99,7 +99,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     isCountLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/notifications/unread-count/')
+      const response = await apiClient.get('/notifications/unread-count/')
 
       unreadCount.value = Number(response.data?.count || 0)
 
@@ -136,7 +136,7 @@ export const useNotificationStore = defineStore('notifications', () => {
 
     try {
       const response = await apiClient.post(
-        `/api/v1/notifications/${notificationId}/read/`,
+        `/notifications/${notificationId}/read/`,
       )
 
       const updatedNotification = response.data
@@ -186,7 +186,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     isMarkingRead.value = true
 
     try {
-      const response = await apiClient.post('/api/v1/notifications/read-all/')
+      const response = await apiClient.post('/notifications/read-all/')
 
       notifications.value = notifications.value.map((item) => ({
         ...item,

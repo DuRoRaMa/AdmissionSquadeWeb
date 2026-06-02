@@ -101,7 +101,7 @@ async function fetchMembersWithFees() {
   errorMessage.value = ''
 
   try {
-    const response = await apiClient.get(`/api/v1/squads/${props.squadId}/members/`)
+    const response = await apiClient.get(`/squads/${props.squadId}/members/`)
     members.value = normalizeListPayload(response.data)
   } catch (error) {
     console.error('Ошибка загрузки участников:', error)
@@ -137,7 +137,7 @@ async function deleteFee(fee) {
   if (!ok) return
 
   try {
-    await apiClient.delete(`/api/v1/squads/fees/${fee.id}/`)
+    await apiClient.delete(`/squads/fees/${fee.id}/`)
     await fetchMembersWithFees()
   } catch (error) {
     console.error(error)

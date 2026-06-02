@@ -233,7 +233,7 @@ async function fetchMembers() {
   clearMessages()
 
   try {
-    const response = await apiClient.get(`/api/v1/squads/${props.squadId}/members/`)
+    const response = await apiClient.get(`/squads/${props.squadId}/members/`)
     members.value = normalizeListPayload(response.data).map(normalizeMember)
   } catch (error) {
     console.error(error)
@@ -253,7 +253,7 @@ async function fetchRoles() {
   loadingRoles.value = true
 
   try {
-    const response = await apiClient.get('/api/v1/users/roles/')
+    const response = await apiClient.get('/users/roles/')
     roles.value = normalizeListPayload(response.data)
   } catch (error) {
     console.error(error)
@@ -286,7 +286,7 @@ async function handleRoleChange(member, nextValue) {
   clearMessages()
 
   try {
-    await apiClient.patch(`/api/v1/squads/members/${member.id}/`, {
+    await apiClient.patch(`/squads/members/${member.id}/`, {
       role: member.role || null,
     })
 
@@ -309,7 +309,7 @@ async function updateTicket(member) {
   clearMessages()
 
   try {
-    await apiClient.patch(`/api/v1/squads/members/${member.id}/`, {
+    await apiClient.patch(`/squads/members/${member.id}/`, {
       ticket_number: member.ticket_number || '',
     })
 
@@ -337,7 +337,7 @@ async function removeMember(member) {
   clearMessages()
 
   try {
-    await apiClient.delete(`/api/v1/squads/members/${member.id}/`)
+    await apiClient.delete(`/squads/members/${member.id}/`)
     successMessage.value = 'Участник исключён из отряда.'
     await fetchMembers()
     await refreshAccessIfNeeded()

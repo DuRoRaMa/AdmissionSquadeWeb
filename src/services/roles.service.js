@@ -13,23 +13,23 @@ function sanitizeRolePayload(payload = {}) {
 }
 
 async function getRoles(params = {}) {
-  const { data } = await apiClient.get('/api/v1/users/roles/', { params })
+  const { data } = await apiClient.get('/users/roles/', { params })
   return data
 }
 
 async function getRole(roleId) {
-  const { data } = await apiClient.get(`/api/v1/users/roles/${roleId}/`)
+  const { data } = await apiClient.get(`/users/roles/${roleId}/`)
   return data
 }
 
 async function getPermissionCatalog() {
-  const { data } = await apiClient.get('/api/v1/users/roles/permissions-catalog/')
+  const { data } = await apiClient.get('/users/roles/permissions-catalog/')
   return data
 }
 
 async function createRole(payload) {
   const { data } = await apiClient.post(
-    '/api/v1/users/roles/',
+    '/users/roles/',
     sanitizeRolePayload(payload)
   )
   return data
@@ -37,14 +37,14 @@ async function createRole(payload) {
 
 async function updateRole(roleId, payload) {
   const { data } = await apiClient.patch(
-    `/api/v1/users/roles/${roleId}/`,
+    `/users/roles/${roleId}/`,
     sanitizeRolePayload(payload)
   )
   return data
 }
 
 async function deleteRole(roleId) {
-  await apiClient.delete(`/api/v1/users/roles/${roleId}/`)
+  await apiClient.delete(`/users/roles/${roleId}/`)
 }
 
 export default {

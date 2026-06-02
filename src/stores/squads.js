@@ -15,7 +15,7 @@ export const useSquadsStore = defineStore('squads', () => {
     error.value = null
 
     try {
-      const response = await apiClient.get('/api/v1/squads/')
+      const response = await apiClient.get('/squads/')
 
       if (response.data && Array.isArray(response.data.results)) {
         squads.value = response.data.results
@@ -68,7 +68,7 @@ export const useSquadsStore = defineStore('squads', () => {
     }
 
     try {
-      const response = await apiClient.post(`/api/v1/squads/${squadId}/members/`, payload)
+      const response = await apiClient.post(`/squads/${squadId}/members/`, payload)
       await userStore.fetchUser()
       return response.data
     } catch (err) {

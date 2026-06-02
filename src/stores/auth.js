@@ -64,7 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(credentials) {
     isLoading.value = true
     try {
-      const tokenResponse = await apiClient.post('api/v1/users/auth/token/', {
+      const tokenResponse = await apiClient.post('/users/auth/token/', {
         email: credentials.email,
         password: credentials.password,
       })
@@ -153,7 +153,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('api/v1/notifications/registration-code/', {
+      const response = await apiClient.post('/notifications/registration-code/', {
         email,
       })
 
@@ -174,7 +174,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function register(userData) {
     isLoading.value = true
     try {
-      const response = await apiClient.post('api/v1/users/register/', userData)
+      const response = await apiClient.post('/users/register/', userData)
       return {
         success: true,
         message: response.data.message,
@@ -194,7 +194,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('api/v1/users/password-reset/', {
+      const response = await apiClient.post('/users/password-reset/', {
         email,
       })
 
@@ -219,7 +219,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await apiClient.post(
-        'api/v1/users/password-reset/confirm/',
+        '/users/password-reset/confirm/',
         data
       )
 

@@ -705,7 +705,7 @@ async function fetchWorkBlocksForSchedule(squadId) {
   workBlocksLoading.value = true
 
   try {
-    const response = await apiClient.get('/api/v1/rosters/work-blocks/', {
+    const response = await apiClient.get('/rosters/work-blocks/', {
       params: {
         squad: squadId,
       },
@@ -731,7 +731,7 @@ async function fetchSquadMembers(squadId) {
     return []
   }
 
-  const response = await apiClient.get(`/api/v1/squads/${squadId}/members/`)
+  const response = await apiClient.get(`/squads/${squadId}/members/`)
 
   return normalizeMembersList(response.data)
 }
