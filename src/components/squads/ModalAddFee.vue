@@ -71,9 +71,9 @@ async function submit() {
   error.value = ''
   try {
     if (editing.value) {
-      await apiClient.patch(`/api/v1/squads/fees/${props.fee.id}/`, form.value)
+      await apiClient.patch(`/squads/fees/${props.fee.id}/`, form.value)
     } else {
-      await apiClient.post(`/api/v1/squads/members/${props.membershipId}/fees/`, form.value)
+      await apiClient.post(`/squads/members/${props.membershipId}/fees/`, form.value)
     }
     emit('saved')
     close()

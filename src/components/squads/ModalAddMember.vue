@@ -107,7 +107,7 @@ const roleOptions = computed(() =>
 
 async function fetchUsers() {
   try {
-    const res = await apiClient.get('/api/v1/users/')
+    const res = await apiClient.get('/users/')
     users.value = res.data.results || res.data
   } catch (err) {
     console.error(err)
@@ -116,7 +116,7 @@ async function fetchUsers() {
 
 async function fetchRoles() {
   try {
-    const res = await apiClient.get('/api/v1/users/roles/')
+    const res = await apiClient.get('/users/roles/')
     roles.value = Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : [])
   } catch (err) {
     console.error(err)
@@ -141,7 +141,7 @@ async function submit() {
       payload.role = form.value.role_id
     }
 
-    await apiClient.post(`/api/v1/squads/${props.squadId}/members/`, payload)
+    await apiClient.post(`/squads/${props.squadId}/members/`, payload)
     emit('added')
     close()
   } catch (err) {

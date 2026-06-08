@@ -220,7 +220,7 @@ async function fetchWorkBlocks() {
   loading.value = true
 
   try {
-    const response = await apiClient.get('/api/v1/rosters/work-blocks/', {
+    const response = await apiClient.get('/rosters/work-blocks/', {
       params: {
         squad: props.squadId,
         include_inactive: true,
@@ -252,7 +252,7 @@ async function handleCreateWorkBlock() {
   saving.value = true
 
   try {
-    await apiClient.post('/api/v1/rosters/work-blocks/', {
+    await apiClient.post('/rosters/work-blocks/', {
       squad: Number(props.squadId),
       code,
       name,
@@ -288,7 +288,7 @@ async function handleToggleWorkBlock(block) {
   togglingId.value = block.id
 
   try {
-    await apiClient.patch(`/api/v1/rosters/work-blocks/${block.id}/`, {
+    await apiClient.patch(`/rosters/work-blocks/${block.id}/`, {
       is_active: nextActive,
     })
 

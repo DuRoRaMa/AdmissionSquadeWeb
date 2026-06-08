@@ -50,15 +50,15 @@ function getErrorMessage(error, fallback) {
 }
 
 function getScheduleEditDataUrl(scheduleId) {
-  return `/api/v1/rosters/schedules/${scheduleId}/edit-data/`
+  return `/rosters/schedules/${scheduleId}/edit-data/`
 }
 
 function getScheduleAssignmentsUrl(scheduleId) {
-  return `/api/v1/rosters/schedules/${scheduleId}/assignments/`
+  return `/rosters/schedules/${scheduleId}/assignments/`
 }
 
 function getScheduleNeedsUrl(scheduleId) {
-  return `/api/v1/rosters/schedules/${scheduleId}/needs/`
+  return `/rosters/schedules/${scheduleId}/needs/`
 }
 
 function getEntryDateTime(entry, timeValue = '00:00') {
@@ -291,7 +291,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     try {
       const response = await apiClient.get(
-        `/api/v1/rosters/entries/${entryId}/replacement-candidates/`,
+        `/rosters/entries/${entryId}/replacement-candidates/`,
       )
 
       const candidates = normalizeListResponse(response.data)
@@ -355,7 +355,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/my-schedule/')
+      const response = await apiClient.get('/rosters/my-schedule/')
 
       myEntries.value = normalizeListResponse(response.data)
 
@@ -379,7 +379,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/my-change-requests/')
+      const response = await apiClient.get('/rosters/my-change-requests/')
 
       myRequests.value = normalizeListResponse(response.data)
 
@@ -403,7 +403,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/change-requests/')
+      const response = await apiClient.get('/rosters/change-requests/')
 
       adminRequests.value = normalizeListResponse(response.data)
 
@@ -427,7 +427,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isCreatingRequest.value = true
 
     try {
-      const response = await apiClient.post('/api/v1/rosters/change-requests/create/', payload)
+      const response = await apiClient.post('/rosters/change-requests/create/', payload)
 
       await fetchMyRequests()
 
@@ -451,7 +451,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     try {
       const response = await apiClient.post(
-        `/api/v1/rosters/change-requests/${requestId}/approve/`,
+        `/rosters/change-requests/${requestId}/approve/`,
         payload,
       )
 
@@ -477,7 +477,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     try {
       const response = await apiClient.post(
-        `/api/v1/rosters/change-requests/${requestId}/reject/`,
+        `/rosters/change-requests/${requestId}/reject/`,
         payload,
       )
 
@@ -502,7 +502,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isQrLoading.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/qr/`)
+      const response = await apiClient.post(`/rosters/entries/${entryId}/qr/`)
 
       return {
         success: true,
@@ -542,7 +542,7 @@ export const useScheduleStore = defineStore('schedule', () => {
         : tokenOrPayload
 
     try {
-      const response = await apiClient.post('/api/v1/rosters/scan-qr/', payload)
+      const response = await apiClient.post('/rosters/scan-qr/', payload)
 
       syncAttendanceFromResponse(response.data)
 
@@ -574,7 +574,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isAttendanceEntriesLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/attendance-entries/', {
+      const response = await apiClient.get('/rosters/attendance-entries/', {
         params: normalizeParams(params),
       })
 
@@ -600,7 +600,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isManualAttendanceProcessing.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/manual-check-in/`)
+      const response = await apiClient.post(`/rosters/entries/${entryId}/manual-check-in/`)
 
       syncAttendanceFromResponse(response.data)
 
@@ -623,7 +623,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isManualAttendanceProcessing.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/entries/${entryId}/manual-check-out/`)
+      const response = await apiClient.post(`/rosters/entries/${entryId}/manual-check-out/`)
 
       syncAttendanceFromResponse(response.data)
 
@@ -646,7 +646,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isAttendanceLogsLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/attendance-logs/', {
+      const response = await apiClient.get('/rosters/attendance-logs/', {
         params: normalizeParams(params),
       })
 
@@ -672,7 +672,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get('/api/v1/rosters/schedules/')
+      const response = await apiClient.get('/rosters/schedules/')
 
       schedules.value = normalizeListResponse(response.data)
 
@@ -696,7 +696,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('/api/v1/rosters/schedules/', payload)
+      const response = await apiClient.post('/rosters/schedules/', payload)
 
       await fetchSchedules()
 
@@ -719,7 +719,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isGenerating.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/schedules/${scheduleId}/generate/`)
+      const response = await apiClient.post(`/rosters/schedules/${scheduleId}/generate/`)
 
       await fetchSchedules()
 
@@ -742,7 +742,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isPublishing.value = true
 
     try {
-      const response = await apiClient.post(`/api/v1/rosters/schedules/${scheduleId}/publish/`)
+      const response = await apiClient.post(`/rosters/schedules/${scheduleId}/publish/`)
 
       await fetchSchedules()
       await fetchMySchedule()
@@ -766,7 +766,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isDeleting.value = true
 
     try {
-      await apiClient.delete(`/api/v1/rosters/schedules/${scheduleId}/`)
+      await apiClient.delete(`/rosters/schedules/${scheduleId}/`)
 
       await fetchSchedules()
 
@@ -788,7 +788,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get(`/api/v1/rosters/schedules/${scheduleId}/entries/`)
+      const response = await apiClient.get(`/rosters/schedules/${scheduleId}/entries/`)
 
       entries.value = normalizeListResponse(response.data)
 
@@ -880,7 +880,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.get(`/api/v1/rosters/schedules/${scheduleId}/export/`, {
+      const response = await apiClient.get(`/rosters/schedules/${scheduleId}/export/`, {
         responseType: 'blob',
       })
 

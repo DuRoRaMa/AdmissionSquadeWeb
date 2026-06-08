@@ -221,7 +221,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('api/v1/notifications/registration-code/', {
+      const response = await apiClient.post('/notifications/registration-code/', {
         email,
       })
 
@@ -275,7 +275,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.post('api/v1/users/password-reset/', {
+      const response = await apiClient.post('/users/password-reset/', {
         email,
       })
 
@@ -300,7 +300,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await apiClient.post(
-        'api/v1/users/password-reset/confirm/',
+        '/users/password-reset/confirm/',
         data
       )
 

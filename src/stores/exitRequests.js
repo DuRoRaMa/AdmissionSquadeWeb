@@ -12,7 +12,7 @@ export const useExitRequestsStore = defineStore('exitRequests', () => {
     try {
       // TODO: заменить на реальный API-вызов, когда бэкенд будет готов
       console.log('Заявка на выход:', { membershipId, reason })
-      // const response = await apiClient.post(`/api/v1/squads/members/${membershipId}/exit-requests/`, { reason })
+      // const response = await apiClient.post(`/squads/members/${membershipId}/exit-requests/`, { reason })
       // return response.data
 
       // Имитация успешного ответа

@@ -175,14 +175,14 @@ function downloadBlob(blob, fileName) {
 }
 
 async function fetchAvailabilityForms() {
-  const response = await apiClient.get('/api/v1/rosters/forms/')
+  const response = await apiClient.get('/rosters/forms/')
   availabilityForms.value = normalizeListResponse(response.data)
 }
 
 async function fetchWorkBlocks(squadId = '') {
   const url = squadId
-    ? `/api/v1/rosters/work-blocks/?squad=${squadId}`
-    : '/api/v1/rosters/work-blocks/'
+    ? `/rosters/work-blocks/?squad=${squadId}`
+    : '/rosters/work-blocks/'
 
   const response = await apiClient.get(url)
   workBlocks.value = normalizeListResponse(response.data)
@@ -267,7 +267,7 @@ async function handleDownloadSchedule(schedule) {
   downloadingScheduleId.value = schedule.id
 
   try {
-    const response = await apiClient.get(`/api/v1/rosters/schedules/${schedule.id}/export/`, {
+    const response = await apiClient.get(`/rosters/schedules/${schedule.id}/export/`, {
       responseType: 'blob',
     })
 

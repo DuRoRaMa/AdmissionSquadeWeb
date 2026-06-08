@@ -67,7 +67,7 @@ async function fetchRoles() {
   errorMessage.value = ''
 
   try {
-    const { data } = await apiClient.get('/api/v1/users/roles/')
+    const { data } = await apiClient.get('/users/roles/')
     roles.value = Array.isArray(data) ? data : data.results || []
   } catch (error) {
     console.error(error)
@@ -101,10 +101,10 @@ async function handleSave(payload) {
 
   try {
     if (modalMode.value === 'create') {
-      await apiClient.post('/api/v1/users/roles/', payload)
+      await apiClient.post('/users/roles/', payload)
       successMessage.value = 'Роль успешно создана.'
     } else {
-      await apiClient.patch(`/api/v1/users/roles/${currentRole.value.id}/`, payload)
+      await apiClient.patch(`/users/roles/${currentRole.value.id}/`, payload)
       successMessage.value = 'Роль успешно обновлена.'
     }
 
@@ -134,7 +134,7 @@ async function handleDelete(role) {
   successMessage.value = ''
 
   try {
-    await apiClient.delete(`/api/v1/users/roles/${role.id}/`)
+    await apiClient.delete(`/users/roles/${role.id}/`)
     roles.value = roles.value.filter((item) => item.id !== role.id)
     successMessage.value = 'Роль удалена.'
   } catch (error) {
