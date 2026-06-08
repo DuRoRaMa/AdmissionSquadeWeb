@@ -1,7 +1,5 @@
-// axios.js
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { useUserStore } from '@/stores/user'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
@@ -13,10 +11,8 @@ const apiClient = axios.create({
   },
 })
 
-// Переменная, чтобы не делать несколько запросов на refresh одновременно
-let isRefreshing = false
-let failedQueue = []
-
+// Отдельный клиент без response-interceptor.
+// Иначе ошибка refresh-запроса может запустить новый refresh.
 const refreshClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -25,72 +21,114 @@ const refreshClient = axios.create({
   },
 })
 
+let isRefreshing = false
+let failedQueue = []
+
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach(({ resolve, reject }) => {
     if (error) {
-      prom.reject(error)
+      reject(error)
     } else {
-      prom.resolve(token)
+      resolve(token)
     }
   })
+
   failedQueue = []
 }
 
-// Interceptor для запросов – добавляем токен
+// Добавляем access-токен в каждый обычный запрос
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
+
     if (token) {
+      config.headers = config.headers || {}
       config.headers.Authorization = `Bearer ${token}`
     }
+
     return config
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 )
 
-// Interceptor для ответов – обработка 401
 apiClient.interceptors.response.use(
   (response) => response,
+
   async (error) => {
     const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // Если уже идёт обновление, добавляем запрос в очередь
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        })
-          .then(() => apiClient(originalRequest))
-          .catch(err => Promise.reject(err))
-      }
+    const status = error.response?.status
 
-      originalRequest._retry = true
-      isRefreshing = true
+    // Обрабатываем только первую ошибку 401 конкретного запроса
+    if (
+      !originalRequest ||
+      status !== 401 ||
+      originalRequest._retry
+    ) {
+      return Promise.reject(error)
+    }
 
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) {
-        // Нет рефреш-токена – выходим
-        const authStore = useAuthStore()
-        authStore.logout()
-        return Promise.reject(error)
-      }
+    originalRequest._retry = true
+
+    // Если refresh уже выполняется, ставим запрос в очередь
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        failedQueue.push({ resolve, reject })
+      }).then((accessToken) => {
+        originalRequest.headers = originalRequest.headers || {}
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`
+
+        return apiClient(originalRequest)
+      })
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken')
+
+    if (!refreshToken) {
+      const authStore = useAuthStore()
+      authStore.logout()
+
+      return Promise.reject(error)
+    }
+
+    isRefreshing = true
 
     try {
-      const response = await refreshClient.post('/users/auth/token/refresh/', {
-        refresh: refreshToken,
-      })
+      const response = await refreshClient.post(
+        '/api/v1/users/auth/token/refresh/',
+        {
+          refresh: refreshToken,
+        },
+      )
 
-      const { access } = response.data
+      const newAccessToken = response.data.access
+      const newRefreshToken = response.data.refresh
+
+      if (!newAccessToken) {
+        throw new Error('Сервер не вернул новый access-токен')
+      }
 
       const authStore = useAuthStore()
-      authStore.setToken(access)
 
-      originalRequest.headers.Authorization = `Bearer ${access}`
+      // Обновляет и localStorage, и реактивное состояние Pinia
+      authStore.setToken(
+        newAccessToken,
+        newRefreshToken || refreshToken,
+      )
 
-      processQueue(null, access)
+      apiClient.defaults.headers.common.Authorization =
+        `Bearer ${newAccessToken}`
 
+      originalRequest.headers = originalRequest.headers || {}
+      originalRequest.headers.Authorization =
+        `Bearer ${newAccessToken}`
+
+      // Возобновляем все запросы, которые ожидали refresh
+      processQueue(null, newAccessToken)
+
+      // Повторяем первоначальный запрос
       return apiClient(originalRequest)
     } catch (refreshError) {
-      processQueue(refreshError, null)
+      processQueue(refreshError)
 
       const authStore = useAuthStore()
       authStore.logout()
@@ -99,9 +137,7 @@ apiClient.interceptors.response.use(
     } finally {
       isRefreshing = false
     }
-    }
-    return Promise.reject(error)
-  }
+  },
 )
 
 export default apiClient

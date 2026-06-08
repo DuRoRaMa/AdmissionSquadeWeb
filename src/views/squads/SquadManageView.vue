@@ -266,7 +266,7 @@ onMounted(async () => {
 }
 
 .tab-button.is-active {
-  background: var(--brand-600);
+  background: var(--btn-primary-gradient);
   color: #fff;
 }
 
@@ -305,7 +305,7 @@ onMounted(async () => {
 }
 
 .btn-primary {
-  background: var(--brand-600);
+  background: var(--btn-primary-gradient);
   color: #fff;
 }
 

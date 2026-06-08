@@ -579,7 +579,7 @@ onMounted(bootstrap)
 }
 
 .btn-primary {
-  background: var(--primary-gradient, linear-gradient(135deg, #4f46e5, #2563eb));
+  background: var(--btn-primary-gradient);
   color: #ffffff;
   box-shadow: 0 10px 22px color-mix(in srgb, var(--primary-color, #4f46e5) 24%, transparent);
 }

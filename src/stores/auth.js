@@ -63,27 +63,29 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(credentials) {
     isLoading.value = true
+
     try {
-      const tokenResponse = await apiClient.post('/users/auth/token/', {
-        email: credentials.email,
-        password: credentials.password,
-      })
+      const response = await apiClient.post(
+        'api/v1/users/auth/token/',
+        credentials,
+      )
 
-      const { access, refresh } = tokenResponse.data
-      setToken(access, refresh)
+      setToken(
+        response.data.access,
+        response.data.refresh,
+      )
 
-      const userStore = useUserStore()
-      await userStore.fetchUser()
-
-      return { success: true, user: userStore.user }
+      return {
+        success: true,
+      }
     } catch (error) {
-      const message =
-        error.response?.data?.detail ||
-        error.response?.data?.message ||
-        error.message ||
-        'Ошибка входа'
-
-      return { success: false, message }
+      return {
+        success: false,
+        message: getApiErrorMessage(
+          error,
+          'Неверный email или пароль.',
+        ),
+      }
     } finally {
       isLoading.value = false
     }
@@ -97,58 +99,124 @@ export const useAuthStore = defineStore('auth', () => {
     const userStore = useUserStore()
     userStore.clearUser()
   }
-  function getApiErrorMessage(error, fallbackMessage = 'Произошла ошибка') {
+  function getApiErrorMessage(
+    error,
+    fallbackMessage = 'Произошла ошибка',
+    withFieldErrors = false,
+  ) {
     const data = error.response?.data
 
+    let message = fallbackMessage
+    const fieldErrors = {}
+
     if (!data) {
-      return error.message || fallbackMessage
+      message = error.message || fallbackMessage
+
+      return withFieldErrors
+        ? { message, fieldErrors }
+        : message
     }
 
     if (typeof data === 'string') {
-      return data
+      message = data
+
+      return withFieldErrors
+        ? { message, fieldErrors }
+        : message
     }
 
+    // Общие ошибки, не относящиеся к конкретному полю
     if (data.detail) {
-      return data.detail
+      message = String(data.detail)
+    } else if (data.message) {
+      message = String(data.message)
+    } else if (data.error) {
+      message = String(data.error)
+    } else if (data.non_field_errors) {
+      message = Array.isArray(data.non_field_errors)
+        ? data.non_field_errors.join(' ')
+        : String(data.non_field_errors)
     }
 
-    if (data.message) {
-      return data.message
-    }
+    const generalErrorKeys = new Set([
+      'detail',
+      'message',
+      'error',
+      'non_field_errors',
+    ])
 
-    if (data.error) {
-      return data.error
-    }
-
-    if (data.non_field_errors) {
-      if (Array.isArray(data.non_field_errors)) {
-        return data.non_field_errors.join(' ')
-      }
-
-      return String(data.non_field_errors)
-    }
-
-    if (typeof data === 'object') {
-      const messages = []
-
+    if (typeof data === 'object' && !Array.isArray(data)) {
       Object.entries(data).forEach(([field, value]) => {
+        if (generalErrorKeys.has(field)) {
+          return
+        }
+
         if (Array.isArray(value)) {
-          messages.push(value.join(' '))
-        } else if (typeof value === 'string') {
-          messages.push(value)
-        } else if (value && typeof value === 'object') {
-          messages.push(JSON.stringify(value))
+          fieldErrors[field] = value
+            .map((item) => String(item))
+            .join(' ')
+          return
+        }
+
+        if (typeof value === 'string') {
+          fieldErrors[field] = value
+          return
+        }
+
+        if (value && typeof value === 'object') {
+          fieldErrors[field] = Object.values(value)
+            .flat()
+            .map((item) => String(item))
+            .join(' ')
         }
       })
-
-      if (messages.length) {
-        return messages.join(' ')
-      }
     }
 
-    return fallbackMessage
-  }
+    // Если общей ошибки нет, но сервер вернул ошибки полей,
+    // формируем резервное сообщение.
+    if (
+      message === fallbackMessage &&
+      Object.keys(fieldErrors).length > 0
+    ) {
+      message = Object.values(fieldErrors).join(' ')
+    }
 
+    return withFieldErrors
+      ? { message, fieldErrors }
+      : message
+  }
+  async function startRegistration(userData) {
+    isLoading.value = true
+
+    try {
+      const response = await apiClient.post(
+        'api/v1/users/register/start/',
+        userData,
+      )
+
+      return {
+        success: true,
+        message:
+          response.data.message ||
+          'Код подтверждения отправлен на почту',
+        errors: {},
+      }
+    } catch (error) {
+      const parsedError = getApiErrorMessage(
+        error,
+        'Не удалось проверить регистрационные данные',
+        true,
+      )
+
+      return {
+        success: false,
+        message: parsedError.message,
+        errors: parsedError.fieldErrors,
+      }
+    } finally {
+      isLoading.value = false
+    }
+  }
   async function sendRegistrationEmailCode(email) {
     isLoading.value = true
 
@@ -173,17 +241,30 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(userData) {
     isLoading.value = true
+
     try {
-      const response = await apiClient.post('/users/register/', userData)
+      const response = await apiClient.post(
+        'api/v1/users/register/',
+        userData,
+      )
+
       return {
         success: true,
         message: response.data.message,
         user: response.data.data,
+        errors: {},
       }
     } catch (error) {
+      const parsedError = getApiErrorMessage(
+        error,
+        'Ошибка регистрации',
+        true,
+      )
+
       return {
         success: false,
-        message: getApiErrorMessage(error, 'Ошибка регистрации'),
+        message: parsedError.message,
+        errors: parsedError.fieldErrors,
       }
     } finally {
       isLoading.value = false
@@ -250,6 +331,7 @@ export const useAuthStore = defineStore('auth', () => {
     resetPassword,
     setToken,
     sendRegistrationEmailCode,
+    startRegistration
   }
 })
 
