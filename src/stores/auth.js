@@ -66,7 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await apiClient.post(
-        'api/v1/users/auth/token/',
+        '/users/auth/token/',
         credentials,
       )
 
@@ -190,7 +190,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await apiClient.post(
-        'api/v1/users/register/start/',
+        '/users/register/start/',
         userData,
       )
 
@@ -244,7 +244,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await apiClient.post(
-        'api/v1/users/register/',
+        '/users/register/',
         userData,
       )
 
