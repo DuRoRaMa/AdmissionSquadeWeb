@@ -60,7 +60,44 @@ const roles = ref([])
 const form = ref({ user_id: '', role_id: '', ticket_number: '', university: 'ДВФУ' })
 const loading = ref(false)
 const error = ref('')
+const getApiErrorMessage = (err, fallback = 'Ошибка добавления участника') => {
+  const data = err.response?.data
 
+  if (!data) {
+    return err.message || fallback
+  }
+
+  if (typeof data === 'string') {
+    return data
+  }
+
+  if (data.detail) {
+    return data.detail
+  }
+
+  if (data.message) {
+    return data.message
+  }
+
+  if (data.error) {
+    return data.error
+  }
+
+  if (Array.isArray(data.non_field_errors)) {
+    return data.non_field_errors.join(' ')
+  }
+
+  if (data.non_field_errors) {
+    return String(data.non_field_errors)
+  }
+
+  // Ошибки отдельных полей сериализатора
+  const fieldErrors = Object.values(data)
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((value) => typeof value === 'string')
+
+  return fieldErrors.join(' ') || fallback
+}
 const userOptions = computed(() =>
   users.value.map(u => ({ value: u.id, label: u.full_name || u.email }))
 )
@@ -108,10 +145,8 @@ async function submit() {
     emit('added')
     close()
   } catch (err) {
-    error.value =
-      err.response?.data?.detail ||
-      err.response?.data?.message ||
-      'Ошибка добавления'
+    console.error('Ошибка добавления участника:', err)
+    error.value = getApiErrorMessage(err)
   } finally {
     loading.value = false
   }
