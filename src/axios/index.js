@@ -94,7 +94,7 @@ apiClient.interceptors.response.use(
 
     try {
       const response = await refreshClient.post(
-        '/api/v1/users/auth/token/refresh/',
+        '/users/auth/token/refresh/',
         {
           refresh: refreshToken,
         },
