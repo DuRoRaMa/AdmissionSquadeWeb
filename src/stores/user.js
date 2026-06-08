@@ -125,7 +125,7 @@ export const useUserStore = defineStore('user', () => {
 
     fetchUserPromise = (async () => {
       try {
-        const response = await apiClient.get('/api/v1/users/me/')
+        const response = await apiClient.get('/users/me/')
         user.value = normalizeUser(response.data)
         return user.value
       } catch (error) {
@@ -148,7 +148,7 @@ export const useUserStore = defineStore('user', () => {
     isLoading.value = true
 
     try {
-      const response = await apiClient.patch('/api/v1/users/me/', data)
+      const response = await apiClient.patch('/users/me/', data)
       user.value = normalizeUser(response.data)
       return user.value
     } catch (error) {

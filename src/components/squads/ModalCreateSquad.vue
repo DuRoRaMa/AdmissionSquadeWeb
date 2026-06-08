@@ -72,7 +72,7 @@ async function submit() {
   loading.value = true
   error.value = ''
   try {
-    await apiClient.post('/api/v1/squads/', form.value)
+    await apiClient.post('/squads/', form.value)
     emit('created')
     close()
   } catch (err) {

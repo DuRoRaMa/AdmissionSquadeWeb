@@ -146,7 +146,7 @@ async function submit() {
   error.value = ''
 
   try {
-    await apiClient.patch(`/api/v1/users/${props.user.id}/`, form.value)
+    await apiClient.patch(`/users/${props.user.id}/`, form.value)
     emit('updated')
     close()
   } catch (err) {

@@ -60,7 +60,7 @@ async function save() {
   isLoading.value = true
   error.value = ''
   try {
-    await apiClient.patch(`/api/v1/squads/${props.squad.id}/`, form.value)
+    await apiClient.patch(`/squads/${props.squad.id}/`, form.value)
     emit('updated')
   } catch (err) {
     error.value = err.response?.data?.detail || 'Ошибка сохранения'
@@ -78,7 +78,7 @@ async function confirmDelete() {
   isDeleting.value = true
   error.value = ''
   try {
-    await apiClient.delete(`/api/v1/squads/${props.squad.id}/`)
+    await apiClient.delete(`/squads/${props.squad.id}/`)
     emit('deleted')
     router.push('/squads')
   } catch (err) {

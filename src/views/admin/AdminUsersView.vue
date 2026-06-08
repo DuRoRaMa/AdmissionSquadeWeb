@@ -153,7 +153,7 @@ async function fetchUsers() {
       is_blocked: filters.value.is_blocked || undefined,
     }
 
-    const res = await apiClient.get('/api/v1/users/', { params })
+    const res = await apiClient.get('/users/', { params })
 
     if (res.data.results) {
       users.value = res.data.results
@@ -190,7 +190,7 @@ async function toggleBlock(user) {
   if (!ok) return
 
   try {
-    await apiClient.patch(`/api/v1/users/${user.id}/`, {
+    await apiClient.patch(`/users/${user.id}/`, {
       is_blocked: !user.is_blocked,
     })
     await fetchUsers()
