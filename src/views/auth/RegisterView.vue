@@ -28,7 +28,7 @@
             v-model="email"
             label="Email"
             type="email"
-            placeholder="name@students.dvfu.ru"
+            placeholder="name@dvfu.ru"
             icon="envelope"
             autocomplete="email"
             required
